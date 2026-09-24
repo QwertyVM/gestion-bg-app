@@ -320,6 +320,11 @@ export function CatalogoClient({
         const translatedMechanics = mechanics.slice(0, 4).map((m) => mechanicMap[m] || m)
         const mecanicas = translatedMechanics.length > 0 ? translatedMechanics.join(', ') : undefined
 
+        let imagenUrl: string | undefined = undefined
+        if (typeof item.image === 'string' && item.image.startsWith('http')) {
+          imagenUrl = item.image
+        }
+
         updates.push({
           id: prod.id,
           bggRating: rating ? parseFloat(rating.toFixed(2)) : null,
@@ -334,6 +339,7 @@ export function CatalogoClient({
           editorialMarca: editorialMarca || null,
           mecanicas: mecanicas || null,
           idioma: 'Español',
+          imagenUrl: imagenUrl || null,
         })
       }
 
@@ -351,6 +357,7 @@ export function CatalogoClient({
               bggMinPlayers: upd.bggMinPlayers,
               bggMaxPlayers: upd.bggMaxPlayers,
               bggPlaytime: upd.bggPlaytime,
+              imagenUrl: upd.imagenUrl || p.imagenUrl,
             }
           })
         )
@@ -1056,14 +1063,16 @@ export function CatalogoClient({
       <div className="hidden lg:block w-full bg-[#FFFFFF] border border-[#E2D9CC] rounded-2xl shadow-xs overflow-hidden">
         <table className="w-full text-left border-collapse table-fixed text-xs">
           <colgroup>
-            <col className="w-[45%]" />
+            <col className="w-[40%]" />
+            <col className="w-[12%]" />
             <col className="w-[15%]" />
-            <col className="w-[20%]" />
-            <col className="w-[20%]" />
+            <col className="w-[18%]" />
+            <col className="w-[15%]" />
           </colgroup>
           <thead>
             <tr className="bg-[#FAF8F5] border-b border-[#E2D9CC] text-[#75695D] text-[11px] font-semibold">
               <th className="py-3.5 px-4 font-bold text-left">Modelo & Familia</th>
+              <th className="py-3.5 px-4 font-bold text-left">Código BGG</th>
               <th className="py-3.5 px-4 font-bold text-right">Costo Base</th>
               <th className="py-3.5 px-4 font-bold text-center">Precio de Venta (Mercado)</th>
               <th className="py-3.5 px-4 font-bold text-center">Estado</th>
@@ -1091,7 +1100,7 @@ export function CatalogoClient({
                       }`}
                     >
                       {/* Columna 1: Modelo & Familia */}
-                      <td className="py-3 px-4 min-w-[200px]">
+                      <td className="py-3 px-4 min-w-[180px]">
                         <div className="flex items-center gap-3">
                           <div className="h-9 w-9 rounded-2xl bg-[#F5EBE1] border border-[#D4BEA7] text-[#A36F4C] flex items-center justify-center flex-shrink-0 shadow-2xs">
                             <Package className="h-4.5 w-4.5 stroke-[2.2]" />
@@ -1105,6 +1114,25 @@ export function CatalogoClient({
                             </Badge>
                           </div>
                         </div>
+                      </td>
+
+                      {/* Columna 2: BGG Code */}
+                      <td className="py-3 px-4 text-left text-xs min-w-[80px]">
+                        {p.bggId ? (
+                          <a
+                            href={`https://boardgamegeek.com/boardgame/${p.bggId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 font-mono font-bold text-[#A36F4C] hover:text-[#754E31] transition-colors bg-[#F5EBE1] px-2 py-0.5 rounded-md border border-[#D4BEA7] cursor-pointer hover:bg-[#EADDD0]"
+                            onClick={(e) => e.stopPropagation()}
+                            title="Ver en BGG"
+                          >
+                            <span>#{p.bggId}</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        ) : (
+                          <span className="text-[#D4BEA7] italic text-[10px]">-</span>
+                        )}
                       </td>
 
                       {/* Columna 3: Costo Base */}
@@ -1174,13 +1202,20 @@ export function CatalogoClient({
                     <div className="h-9 w-9 rounded-2xl bg-[#F5EBE1] border border-[#D4BEA7] text-[#A36F4C] flex items-center justify-center flex-shrink-0 shadow-2xs">
                       <Package className="h-4.5 w-4.5 stroke-[2.2]" />
                     </div>
-                    <div className="min-w-0">
-                      <span className="font-bold text-sm text-[#241C15] block truncate" title={p.nombreModelo}>
+                    <div className="min-w-0 flex flex-col items-start">
+                      <span className="font-bold text-sm text-[#241C15] block truncate w-full" title={p.nombreModelo}>
                         {p.nombreModelo}
                       </span>
-                      <Badge variant="outline" className="text-[10px] px-2 py-0 bg-[#FAF8F5] text-[#75695D] border-[#E2D9CC] mt-0.5">
-                        {p.lineaCategoria || 'General'}
-                      </Badge>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <Badge variant="outline" className="text-[10px] px-2 py-0 bg-[#FAF8F5] text-[#75695D] border-[#E2D9CC]">
+                          {p.lineaCategoria || 'General'}
+                        </Badge>
+                        {p.bggId && (
+                          <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-mono font-bold text-[#A36F4C] bg-[#F5EBE1] border-[#D4BEA7]">
+                            BGG: #{p.bggId}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
 

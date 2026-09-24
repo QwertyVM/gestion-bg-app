@@ -17,6 +17,7 @@ export interface BggStatUpdateItem {
   editorialMarca?: string | null
   mecanicas?: string | null
   idioma?: string | null
+  imagenUrl?: string | null
 }
 
 export async function updateBggStats(
@@ -75,6 +76,7 @@ export async function bulkUpdateBggStats(updates: BggStatUpdateItem[]) {
             editorialMarca: item.editorialMarca !== undefined ? item.editorialMarca : undefined,
             mecanicas: item.mecanicas !== undefined ? item.mecanicas : undefined,
             idioma: item.idioma !== undefined ? item.idioma : undefined,
+            imagenUrl: item.imagenUrl !== undefined ? item.imagenUrl : undefined,
             bggRatingUpdatedAt: now,
           },
         })
