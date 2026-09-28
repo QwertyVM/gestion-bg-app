@@ -1,4 +1,4 @@
-export type DatePreset = 'ESTE_MES' | 'MES_ANTERIOR' | 'ULTIMOS_30_DIAS' | 'ESTE_ANIO' | 'TODO' | 'PERSONALIZADO'
+export type DatePreset = 'ESTE_MES' | 'MES_ANTERIOR' | 'ULTIMOS_30_DIAS' | 'ULTIMOS_3_MESES' | 'ESTE_ANIO' | 'ESTA_SEMANA' | 'SEMANA_ANTERIOR' | 'TODO' | 'PERSONALIZADO'
 
 export interface DateRange {
   from: string | null // Formato YYYY-MM-DD
@@ -25,6 +25,34 @@ export function getPresetDateRange(preset: DatePreset, referenceDate: Date = new
   const currentMonth = now.getMonth() // 0-11
 
   switch (preset) {
+    case 'ESTA_SEMANA': {
+      // Semana de Lunes a Domingo en curso
+      const dayOfWeek = now.getDay() // 0 = Domingo, 1 = Lunes, ..., 6 = Sábado
+      const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+      const monday = new Date(now)
+      monday.setDate(now.getDate() + diffToMonday)
+      const sunday = new Date(monday)
+      sunday.setDate(monday.getDate() + 6)
+      return {
+        from: formatToYMD(monday),
+        to: formatToYMD(sunday),
+        preset: 'ESTA_SEMANA'
+      }
+    }
+    case 'SEMANA_ANTERIOR': {
+      // Semana de Lunes a Domingo previa cerrada
+      const dayOfWeek = now.getDay()
+      const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+      const monday = new Date(now)
+      monday.setDate(now.getDate() + diffToMonday - 7)
+      const sunday = new Date(monday)
+      sunday.setDate(monday.getDate() + 6)
+      return {
+        from: formatToYMD(monday),
+        to: formatToYMD(sunday),
+        preset: 'SEMANA_ANTERIOR'
+      }
+    }
     case 'ESTE_MES': {
       const firstDay = new Date(currentYear, currentMonth, 1)
       const lastDay = new Date(currentYear, currentMonth + 1, 0)
@@ -50,6 +78,15 @@ export function getPresetDateRange(preset: DatePreset, referenceDate: Date = new
         from: formatToYMD(past30),
         to: formatToYMD(now),
         preset: 'ULTIMOS_30_DIAS'
+      }
+    }
+    case 'ULTIMOS_3_MESES': {
+      const past3Months = new Date(now)
+      past3Months.setMonth(past3Months.getMonth() - 3)
+      return {
+        from: formatToYMD(past3Months),
+        to: formatToYMD(now),
+        preset: 'ULTIMOS_3_MESES'
       }
     }
     case 'ESTE_ANIO': {

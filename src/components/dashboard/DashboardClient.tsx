@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { 
   ComposedChart, 
   Bar, 
-  Line,
+  Line, 
+  Area, 
   XAxis, 
   YAxis, 
   CartesianGrid, 
@@ -16,20 +17,21 @@ import {
   PieChart, 
   Pie, 
   Cell, 
-  Legend,
-  ReferenceLine
+  Legend, 
+  ReferenceLine 
 } from 'recharts'
 import { 
   TrendingUp, 
-  ArrowRight,
-  ShieldCheck,
-  Wallet,
-  RefreshCw,
-  Trophy,
-  Users,
-  ShoppingBag,
-  Package,
-  ArrowUpRight
+  ArrowRight, 
+  ShieldCheck, 
+  Wallet, 
+  RefreshCw, 
+  Trophy, 
+  Users, 
+  ShoppingBag, 
+  Package, 
+  ArrowUpRight,
+  Dice5
 } from 'lucide-react'
 
 import { DateFilterControl } from '@/components/ui/DateFilterControl'
@@ -46,37 +48,124 @@ function getInitials(name: string) {
   return (parts[0][0] + parts[1][0]).toUpperCase()
 }
 
-// Custom Tooltip limpio y minimalista
-function CustomEvolucionTooltip({ active, payload, label }: any) {
+// Configuración de los 3 gráficos analíticos para Juegos de Mesa
+const EVOLUCION_CONFIG = {
+  MARGEN: {
+    title: 'Margen Real por Pedido',
+    description: 'Facturación vendida vs. costo base de adquisición por día'
+  },
+  FLUJO: {
+    title: 'Flujo Diario de Caja',
+    description: 'Cobranzas recibidas vs. egresos de la tienda por fecha real'
+  },
+  ACUMULADO: {
+    title: 'Curva Acumulativa del Período',
+    description: 'Tendencia acumulada de cobranzas vs. egresos a la fecha'
+  },
+  TODOS: {
+    title: 'Análisis Financiero Completo (3 Gráficos)',
+    description: 'Margen comercial, flujo de caja y curva acumulada'
+  }
+}
+
+// Tooltip 1: Margen por Pedido
+function MargenTooltip({ active, payload, label }: any) {
   if (active && payload && payload.length) {
     const data = payload[0]?.payload || {}
-    const ingresos = Number(data.ingresos || 0)
-    const costo = Number(data.costo || 0)
-    const ganancia = Number(data.ganancia != null ? data.ganancia : (ingresos - costo))
-    const isNegative = ganancia < 0
+    const venta = Number(data.ventaTotal || 0)
+    const costo = Number(data.costoProduccion || 0)
+    const utilidad = Number(data.utilidad || 0)
+    const margenPct = data.margenPct || 0
+    const pedidos = data.pedidosDetalle || []
 
     return (
-      <div className="bg-white border border-[#E5DCD3] rounded-xl shadow-lg p-3 min-w-[200px] text-xs font-sans">
+      <div className="bg-white border border-[#E5DCD3] rounded-xl shadow-lg p-3 min-w-[220px] max-w-[280px] text-xs font-sans">
         <div className="flex items-center justify-between border-b border-[#F5EFEB] pb-1.5 mb-2">
           <span className="font-bold text-[#1F2937]">{formatFechaEvolucion(label, true)}</span>
-          <span className={`text-[10px] font-semibold ${isNegative ? 'text-[#DC2626]' : 'text-[#059669]'}`}>
-            {isNegative ? 'Pérdida' : 'Utilidad'}
+          <span className="text-[10px] font-semibold text-[#059669] bg-[#ECFDF5] px-1.5 py-0.5 rounded">
+            {margenPct}% margen
           </span>
         </div>
-
         <div className="space-y-1.5 text-[#6B7280]">
           <div className="flex justify-between items-center">
-            <span>Facturación:</span>
-            <span className="font-mono font-semibold text-[#1F2937]">S/ {ingresos.toFixed(2)}</span>
+            <span>Venta Total:</span>
+            <span className="font-mono font-bold text-[#1F2937]">S/ {venta.toFixed(2)}</span>
           </div>
           <div className="flex justify-between items-center">
-            <span>Costo producción:</span>
-            <span className="font-mono font-semibold text-[#1F2937]">S/ {costo.toFixed(2)}</span>
+            <span>Costo Base / Compra:</span>
+            <span className="font-mono font-medium text-[#75695D]">S/ {costo.toFixed(2)}</span>
           </div>
           <div className="flex justify-between items-center pt-1.5 border-t border-[#F5EFEB] font-bold">
-            <span className={isNegative ? 'text-[#DC2626]' : 'text-[#059669]'}>Resultado neto:</span>
+            <span className="text-[#059669]">Utilidad Neta:</span>
+            <span className="font-mono text-sm text-[#059669]">
+              +S/ {utilidad.toFixed(2)}
+            </span>
+          </div>
+
+          {/* Desglose de pedidos del día con Cliente y Juego de Mesa */}
+          {pedidos.length > 0 && (
+            <div className="pt-2 border-t border-[#F5EFEB] space-y-1">
+              <div className="text-[10px] uppercase font-bold text-[#9CA3AF] tracking-wider">
+                {pedidos.length === 1 ? 'Detalle del pedido' : `${pedidos.length} pedidos registrados`}:
+              </div>
+              {pedidos.map((p: any, idx: number) => (
+                <div key={idx} className="flex justify-between items-start text-[11px] gap-2 py-0.5">
+                  <div className="truncate min-w-0 flex-1">
+                    <span className="font-semibold text-[#1F2937] block truncate">{p.cliente}</span>
+                    <span className="text-[#6B7280] block text-[10px] truncate">{p.producto}</span>
+                  </div>
+                  <span className="font-mono font-bold text-[#1F2937] shrink-0">
+                    S/ {Number(p.total).toFixed(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+  return null
+}
+
+// Tooltip 2: Flujo Diario de Caja
+function FlujoCajaTooltip({ active, payload, label }: any) {
+  if (active && payload && payload.length) {
+    const data = payload[0]?.payload || {}
+    const entradas = Number(data.entradas || 0)
+    const salidas = Number(data.salidas || 0)
+    const balanceNeto = Number(data.balanceNeto || 0)
+    const isNegative = balanceNeto < 0
+
+    return (
+      <div className="bg-white border border-[#E5DCD3] rounded-xl shadow-lg p-3 min-w-[210px] text-xs font-sans">
+        <div className="flex items-center justify-between border-b border-[#F5EFEB] pb-1.5 mb-2">
+          <span className="font-bold text-[#1F2937]">{formatFechaEvolucion(label, true)}</span>
+          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+            isNegative ? 'text-[#DC2626] bg-[#FEF2F2]' : 'text-[#059669] bg-[#ECFDF5]'
+          }`}>
+            {isNegative ? 'Déficit Día' : 'Superávit Día'}
+          </span>
+        </div>
+        <div className="space-y-1.5 text-[#6B7280]">
+          <div className="flex justify-between items-center">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-[#059669]" />
+              Cobranzas (Entradas):
+            </span>
+            <span className="font-mono font-bold text-[#059669]">S/ {entradas.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-[#DC2626]" />
+              Egresos & Compras (Salidas):
+            </span>
+            <span className="font-mono font-bold text-[#DC2626]">S/ {salidas.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center pt-1.5 border-t border-[#F5EFEB] font-bold">
+            <span className={isNegative ? 'text-[#DC2626]' : 'text-[#059669]'}>Balance Neto:</span>
             <span className={`font-mono text-sm ${isNegative ? 'text-[#DC2626]' : 'text-[#059669]'}`}>
-              {isNegative ? `-S/ ${Math.abs(ganancia).toFixed(2)}` : `+S/ ${ganancia.toFixed(2)}`}
+              {isNegative ? `-S/ ${Math.abs(balanceNeto).toFixed(2)}` : `+S/ ${balanceNeto.toFixed(2)}`}
             </span>
           </div>
         </div>
@@ -86,36 +175,51 @@ function CustomEvolucionTooltip({ active, payload, label }: any) {
   return null
 }
 
-// Leyenda minimalista
-function CustomEvolutionLegend() {
-  return (
-    <div className="flex items-center justify-end gap-4 text-xs pb-2 text-[#6B7280]">
-      <div className="flex items-center gap-1.5 font-medium">
-        <span className="w-2.5 h-2.5 bg-[#059669] rounded-xs inline-block" />
-        <span>Utilidad Neta</span>
-      </div>
-      <div className="flex items-center gap-1.5 font-medium">
-        <span className="w-2.5 h-2.5 bg-[#DC2626] rounded-xs inline-block" />
-        <span>Pérdida / Costo</span>
-      </div>
-      <div className="flex items-center gap-1.5 font-medium text-[#7C5835]">
-        <span className="w-3.5 h-0.5 bg-[#7C5835] rounded-full inline-block" />
-        <span>Facturación</span>
-      </div>
-    </div>
-  )
-}
+// Tooltip 3: Curva Acumulada
+function CurvaAcumuladaTooltip({ active, payload, label }: any) {
+  if (active && payload && payload.length) {
+    const data = payload[0]?.payload || {}
+    const cobranza = Number(data.ingresosAcum || 0)
+    const gastos = Number(data.egresosAcum || 0)
+    const balance = Number(data.balanceAcum || 0)
+    const isNegative = balance < 0
 
-export interface TopColorItem {
-  id: string
-  nombreColor: string
-  codigoHex: string
-  pedidosCount: number
-  unidadesCount: number
-  gramosTotal: number
-  stockGramosActual: number
-  alertaCritica: boolean
-  porcentajeUso: number
+    return (
+      <div className="bg-white border border-[#E5DCD3] rounded-xl shadow-lg p-3 min-w-[220px] text-xs font-sans">
+        <div className="flex items-center justify-between border-b border-[#F5EFEB] pb-1.5 mb-2">
+          <span className="font-bold text-[#1F2937]">{formatFechaEvolucion(label, true)}</span>
+          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+            isNegative ? 'text-[#DC2626] bg-[#FEF2F2]' : 'text-[#059669] bg-[#ECFDF5]'
+          }`}>
+            {isNegative ? 'Déficit Acumulado' : 'Superávit Acumulado'}
+          </span>
+        </div>
+        <div className="space-y-1.5 text-[#6B7280]">
+          <div className="flex justify-between items-center">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-[#059669]" />
+              Cobranza Acumulada:
+            </span>
+            <span className="font-mono font-bold text-[#059669]">S/ {cobranza.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-[#DC2626]" />
+              Gastos Acumulados:
+            </span>
+            <span className="font-mono font-bold text-[#DC2626]">S/ {gastos.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center pt-1.5 border-t border-[#F5EFEB] font-bold">
+            <span className={isNegative ? 'text-[#DC2626]' : 'text-[#059669]'}>Balance a la Fecha:</span>
+            <span className={`font-mono text-sm ${isNegative ? 'text-[#DC2626]' : 'text-[#059669]'}`}>
+              {isNegative ? `-S/ ${Math.abs(balance).toFixed(2)}` : `+S/ ${balance.toFixed(2)}`}
+            </span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  return null
 }
 
 export interface TopClienteItem {
@@ -140,6 +244,9 @@ export interface TopArticuloItem {
   precioPromedio: number
   porcentajeUnidades: number
   porcentajeFacturacion: number
+  costoProduccionTotal?: number
+  gananciaNeta?: number
+  margenPorcentaje?: number
 }
 
 export interface CapacidadGastoData {
@@ -170,13 +277,11 @@ interface DashboardClientProps {
   graficoEvolucion: { fecha: string; ingresos: number; costo: number; ganancia: number }[]
   graficoInversion: { name: string; value: number }[]
   cuentasPorCobrar?: any[]
-  topColores?: TopColorItem[]
   topClientes?: TopClienteItem[]
   topArticulos?: TopArticuloItem[]
   rawVentas?: any[]
   rawInversiones?: any[]
   rawIngresosDirectos?: any[]
-  rawFilamentos?: any[]
 }
 
 export function DashboardClient({ 
@@ -188,13 +293,16 @@ export function DashboardClient({
   topArticulos: initialTopArticulos = [],
   rawVentas = [],
   rawInversiones = [],
-  rawIngresosDirectos = [],
-  rawFilamentos = []
+  rawIngresosDirectos = []
 }: DashboardClientProps) {
   const router = useRouter()
-  // Default to Mes Actual
-  const [dateRange, setDateRange] = useState<DateRange>(() => getPresetDateRange('ESTE_MES'))
+  // Default al historial completo
+  const [dateRange, setDateRange] = useState<DateRange>(() => getPresetDateRange('TODO'))
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [distribucionMode, setDistribucionMode] = useState<'VS' | 'CATEGORIAS'>('VS')
+  const [evolucionTab, setEvolucionTab] = useState<'MARGEN' | 'FLUJO' | 'ACUMULADO' | 'TODOS'>('MARGEN')
+  const [soloDiasConVentas, setSoloDiasConVentas] = useState(true)
+  const [rankingArticulosMode, setRankingArticulosMode] = useState<'RENTABILIDAD' | 'VOLUMEN'>('RENTABILIDAD')
 
   const formatCurrency = (val: number) => `S/ ${val.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -234,16 +342,17 @@ export function DashboardClient({
     const gananciaNeta = ingresosVentas - costoFabricacionTotal
     const margenPorcentaje = costoFabricacionTotal > 0 ? (gananciaNeta / costoFabricacionTotal) * 100 : 0
 
-    // Cobranzas efectivas dentro del período
-    const totalCobradoVentas = filteredVentas.reduce((sum: number, v: any) => {
+    // Cobranzas efectivas dentro del período (considera abonos recibidos en el período de cualquier pedido)
+    const totalCobradoVentas = rawVentas.reduce((sum: number, v: any) => {
       if (Array.isArray(v.pagos) && v.pagos.length > 0) {
         const pagosEnRango = v.pagos.filter((p: any) => isDateInRange(p.fecha, dateRange.from, dateRange.to))
-        if (pagosEnRango.length > 0) {
-          return sum + pagosEnRango.reduce((pSum: number, p: any) => pSum + Number(p.monto || 0), 0)
-        }
+        return sum + pagosEnRango.reduce((pSum: number, p: any) => pSum + Number(p.monto || 0), 0)
       }
       // Fallback si no hay array de pagos pero la fecha de venta está en rango
-      return sum + Number(v.montoPagado || 0)
+      if (isDateInRange(v.fecha, dateRange.from, dateRange.to)) {
+        return sum + Number(v.montoPagado || 0)
+      }
+      return sum
     }, 0)
 
     const saldoPorCobrar = filteredVentas.reduce((sum: number, v: any) => sum + Number(v.saldoPendiente || 0), 0)
@@ -290,77 +399,209 @@ export function DashboardClient({
     }
   }, [dynamicKpis, filteredVentas.length])
 
-  // 6. Gráfico de evolución diario dinámico
-  const graficoFiltrado = useMemo(() => {
-    if (rawVentas.length === 0) return initialGraficoEvolucion
+  // 6. Métricas y datos para los 3 gráficos financieros
+  const metricasEvolucion = useMemo(() => {
+    const timelineMap: Record<string, {
+      ventaTotal: number
+      costoProduccion: number
+      utilidad: number
+      entradas: number
+      salidas: number
+      pedidosCount: number
+      pedidosDetalle?: { cliente: string; producto: string; total: number }[]
+    }> = {}
 
-    const timelineMap: Record<string, { ingresos: number; costo: number; ganancia: number }> = {}
+    // A. Inicializar todos los días del período para rangos continuos (ej. semana o mes de hasta 60 días)
+    if (dateRange.from && dateRange.to) {
+      const [startYear, startMonth, startDay] = dateRange.from.split('-').map(Number)
+      const [endYear, endMonth, endDay] = dateRange.to.split('-').map(Number)
+      const curr = new Date(startYear, startMonth - 1, startDay)
+      const end = new Date(endYear, endMonth - 1, endDay)
 
-    // A. Costos y ventas base
-    filteredVentas.forEach((venta: any) => {
-      const vDate = String(venta.fecha).split('T')[0]
+      const diffDays = Math.round((end.getTime() - curr.getTime()) / (1000 * 60 * 60 * 24))
+      if (diffDays >= 0 && diffDays <= 60) {
+        while (curr <= end) {
+          const y = curr.getFullYear()
+          const m = String(curr.getMonth() + 1).padStart(2, '0')
+          const d = String(curr.getDate()).padStart(2, '0')
+          timelineMap[`${y}-${m}-${d}`] = {
+            ventaTotal: 0,
+            costoProduccion: 0,
+            utilidad: 0,
+            entradas: 0,
+            salidas: 0,
+            pedidosCount: 0,
+            pedidosDetalle: []
+          }
+          curr.setDate(curr.getDate() + 1)
+        }
+      }
+    }
+
+    // B. Procesar ventas base (Facturación y Costo en la fecha de la venta)
+    filteredVentas.forEach((v: any) => {
+      const vDate = v.fecha ? String(v.fecha).split('T')[0] : ''
+      if (!vDate) return
+
       if (!timelineMap[vDate]) {
-        timelineMap[vDate] = { ingresos: 0, costo: 0, ganancia: 0 }
+        timelineMap[vDate] = {
+          ventaTotal: 0,
+          costoProduccion: 0,
+          utilidad: 0,
+          entradas: 0,
+          salidas: 0,
+          pedidosCount: 0,
+          pedidosDetalle: []
+        }
       }
 
-      const costoBaseUnit = venta.costoBaseSnapshot != null && Number(venta.costoBaseSnapshot) > 0 
-        ? Number(venta.costoBaseSnapshot) 
-        : (Number(venta.producto?.costoBase) || 0)
-      const ventaCosto = costoBaseUnit * Number(venta.cantidad || 1)
-      timelineMap[vDate].costo += ventaCosto
+      const totalVenta = Number(v.total || 0)
+      const costoBaseUnit = v.costoBaseSnapshot != null && Number(v.costoBaseSnapshot) > 0 
+        ? Number(v.costoBaseSnapshot) 
+        : (Number(v.producto?.costoBase) || 0)
+      const costoProd = costoBaseUnit * Number(v.cantidad || 1)
 
-      if (!venta.pagos || venta.pagos.length === 0) {
-        timelineMap[vDate].ingresos += Number(venta.montoPagado != null ? venta.montoPagado : venta.total)
+      timelineMap[vDate].ventaTotal += totalVenta
+      timelineMap[vDate].costoProduccion += costoProd
+      timelineMap[vDate].utilidad += (totalVenta - costoProd)
+      timelineMap[vDate].pedidosCount += 1
+
+      const clienteName = v.cliente || 'Cliente'
+      const prodName = v.nombreProductoSnapshot || v.producto?.nombreModelo || 'Juego'
+      if (!timelineMap[vDate].pedidosDetalle) timelineMap[vDate].pedidosDetalle = []
+      timelineMap[vDate].pedidosDetalle.push({
+        cliente: clienteName,
+        producto: prodName,
+        total: totalVenta
+      })
+
+      // Si la venta no tiene pagos registrados, sumar como entrada en su fecha
+      if (!v.pagos || v.pagos.length === 0) {
+        timelineMap[vDate].entradas += Number(v.montoPagado != null ? v.montoPagado : v.total)
       }
     })
 
-    // B. Recaudaciones en fecha de pago
-    filteredVentas.forEach((venta: any) => {
-      if (Array.isArray(venta.pagos) && venta.pagos.length > 0) {
-        venta.pagos.forEach((pago: any) => {
-          const pDate = String(pago.fecha).split('T')[0]
-          if (isDateInRange(pDate, dateRange.from, dateRange.to)) {
-            if (!timelineMap[pDate]) {
-              timelineMap[pDate] = { ingresos: 0, costo: 0, ganancia: 0 }
+    // C. Procesar cobros reales (entradas) según la fecha efectiva del pago
+    rawVentas.forEach((v: any) => {
+      if (Array.isArray(v.pagos) && v.pagos.length > 0) {
+        v.pagos.forEach((p: any) => {
+          const pDate = p.fecha ? String(p.fecha).split('T')[0] : ''
+          if (!pDate) return
+          if (!isDateInRange(pDate, dateRange.from, dateRange.to)) return
+
+          if (!timelineMap[pDate]) {
+            timelineMap[pDate] = {
+              ventaTotal: 0,
+              costoProduccion: 0,
+              utilidad: 0,
+              entradas: 0,
+              salidas: 0,
+              pedidosCount: 0,
+              pedidosDetalle: []
             }
-            timelineMap[pDate].ingresos += Number(pago.monto || 0)
           }
+          timelineMap[pDate].entradas += Number(p.monto || 0)
         })
       }
     })
 
-    return Object.entries(timelineMap)
-      .map(([fecha, vals]) => {
-        const ingresos = Number(vals.ingresos.toFixed(2))
-        const costo = Number(vals.costo.toFixed(2))
-        const ganancia = Number((ingresos - costo).toFixed(2))
-        return { fecha, ingresos, costo, ganancia }
-      })
-      .sort((a, b) => a.fecha.localeCompare(b.fecha))
-  }, [filteredVentas, rawVentas, dateRange, initialGraficoEvolucion])
+    // D. Procesar egresos e inversiones (salidas) según la fecha del gasto
+    filteredInversiones.forEach((inv: any) => {
+      const invDate = inv.fecha ? String(inv.fecha).split('T')[0] : ''
+      if (!invDate) return
 
-  // 7. Distribución de gastos dinámico
+      if (!timelineMap[invDate]) {
+        timelineMap[invDate] = {
+          ventaTotal: 0,
+          costoProduccion: 0,
+          utilidad: 0,
+          entradas: 0,
+          salidas: 0,
+          pedidosCount: 0,
+          pedidosDetalle: []
+        }
+      }
+      timelineMap[invDate].salidas += Number(inv.costoTotal || 0)
+    })
+
+    // E. Convertir a array ordenado y calcular acumulados
+    const sortedDates = Object.keys(timelineMap).sort()
+    let acumCobranzas = 0
+    let acumGastos = 0
+
+    return sortedDates.map(dateKey => {
+      const d = timelineMap[dateKey]
+      acumCobranzas += d.entradas
+      acumGastos += d.salidas
+
+      const margenPct = d.ventaTotal > 0 
+        ? Number(((d.utilidad / d.ventaTotal) * 100).toFixed(1)) 
+        : 0
+
+      return {
+        fecha: dateKey,
+        ventaTotal: Number(d.ventaTotal.toFixed(2)),
+        costoProduccion: Number(d.costoProduccion.toFixed(2)),
+        utilidad: Number(d.utilidad.toFixed(2)),
+        margenPct,
+        entradas: Number(d.entradas.toFixed(2)),
+        salidas: Number(d.salidas.toFixed(2)),
+        balanceNeto: Number((d.entradas - d.salidas).toFixed(2)),
+        ingresosAcum: Number(acumCobranzas.toFixed(2)),
+        egresosAcum: Number(acumGastos.toFixed(2)),
+        balanceAcum: Number((acumCobranzas - acumGastos).toFixed(2)),
+        pedidosCount: d.pedidosCount,
+        pedidosDetalle: d.pedidosDetalle || []
+      }
+    })
+  }, [filteredVentas, filteredInversiones, rawVentas, dateRange])
+
+  // 7. Datos de Distribución de Egresos vs Ingresos (Donut Chart)
+  const comparativaIngresosGastos = useMemo(() => {
+    const ingresos = dynamicKpis.totalCobradoVentas + dynamicKpis.totalIngresosDirectos
+    const egresos = dynamicKpis.egresosTotales
+    const balance = ingresos - egresos
+    const totalFlujo = ingresos + egresos
+
+    const ingresosPct = totalFlujo > 0 ? Number(((ingresos / totalFlujo) * 100).toFixed(1)) : 0
+    const egresosPct = totalFlujo > 0 ? Number(((egresos / totalFlujo) * 100).toFixed(1)) : 0
+
+    const dataDonut = [
+      { name: 'Cobranza en Caja', value: Number(ingresos.toFixed(2)), color: '#059669', pct: ingresosPct },
+      { name: 'Gastos & Egresos', value: Number(egresos.toFixed(2)), color: '#DC2626', pct: egresosPct }
+    ].filter(d => d.value > 0)
+
+    return {
+      ingresos,
+      egresos,
+      balance,
+      ingresosPct,
+      egresosPct,
+      dataDonut
+    }
+  }, [dynamicKpis])
+
+  // 7b. Datos de Inversión por Categoría Dinámico (Donut Chart en modo Categorías)
   const graficoInversionDinamico = useMemo(() => {
     if (rawInversiones.length === 0) return initialGraficoInversion
 
-    const distribucion = filteredInversiones.reduce((acc: Record<string, number>, inv: any) => {
-      let catName = 'Insumos & Materiales'
-      if (inv.categoria === 'ACTIVO_FIJO') catName = 'Maquinaria & Equipos'
-      else if (inv.categoria === 'SERVICIO') catName = 'Servicios & Operativos'
-      else if (inv.categoria === 'APORTE_CAPITAL') catName = 'Aporte Capital'
-      
-      acc[catName] = (acc[catName] || 0) + Number(inv.costoTotal || 0)
-      return acc
-    }, {})
+    const categoriasMap: Record<string, number> = {}
+    filteredInversiones.forEach((inv: any) => {
+      const cat = inv.categoria || 'OTROS'
+      categoriasMap[cat] = (categoriasMap[cat] || 0) + Number(inv.costoTotal || 0)
+    })
 
-    return Object.entries(distribucion).map(([name, value]) => ({ name, value: Number(value) }))
+    return Object.entries(categoriasMap).map(([name, value]) => ({
+      name,
+      value: Number(value.toFixed(2))
+    })).filter(c => c.value > 0)
   }, [filteredInversiones, rawInversiones, initialGraficoInversion])
 
   const totalEgresosCalculado = useMemo(() => {
-    return graficoInversionDinamico.reduce((sum, item) => sum + Number(item.value || 0), 0) || dynamicKpis.egresosTotales
-  }, [graficoInversionDinamico, dynamicKpis.egresosTotales])
+    return graficoInversionDinamico.reduce((sum, item) => sum + item.value, 0)
+  }, [graficoInversionDinamico])
 
-  // 8. Top 5 Clientes en valor en el período seleccionado
+  // 8. Top 5 Clientes Dinámico según el período seleccionado
   const topClientesDinamico = useMemo(() => {
     if (rawVentas.length === 0) return initialTopClientes
 
@@ -376,45 +617,48 @@ export function DashboardClient({
     }> = {}
 
     filteredVentas.forEach((v: any) => {
-      const rawCliente = (v.cliente || 'Cliente sin nombre').trim()
-      const cKey = rawCliente.toLowerCase()
+      const nombre = (v.cliente || 'Anónimo').trim()
+      const cKey = nombre.toLowerCase()
 
       if (!clientesMap[cKey]) {
         clientesMap[cKey] = {
-          cliente: rawCliente,
+          cliente: nombre,
           totalComprado: 0,
           totalPagado: 0,
           saldoPendiente: 0,
           pedidosCount: 0,
           piezasCount: 0,
           canales: {},
-          ultimoPedidoFecha: String(v.fecha)
+          ultimoPedidoFecha: ''
         }
       }
 
-      const c = clientesMap[cKey]
-      c.totalComprado += Number(v.total || 0)
-      c.totalPagado += Number(v.montoPagado || 0)
-      c.saldoPendiente += Number(v.saldoPendiente || 0)
-      c.pedidosCount += 1
-      c.piezasCount += Number(v.cantidad || 1)
+      const total = Number(v.total || 0)
+      const pagado = Number(v.montoPagado || 0)
+      const saldo = Number(v.saldoPendiente || 0)
+      const cant = Number(v.cantidad || 1)
 
-      if (v.canalVenta) {
-        c.canales[v.canalVenta] = (c.canales[v.canalVenta] || 0) + 1
-      }
+      clientesMap[cKey].totalComprado += total
+      clientesMap[cKey].totalPagado += pagado
+      clientesMap[cKey].saldoPendiente += saldo
+      clientesMap[cKey].pedidosCount += 1
+      clientesMap[cKey].piezasCount += cant
 
-      const vFecha = String(v.fecha)
-      if (new Date(vFecha).getTime() > new Date(c.ultimoPedidoFecha).getTime()) {
-        c.ultimoPedidoFecha = vFecha
+      const canal = v.canalVenta || 'Directo'
+      clientesMap[cKey].canales[canal] = (clientesMap[cKey].canales[canal] || 0) + 1
+
+      const vFecha = v.fecha ? String(v.fecha).split('T')[0] : ''
+      if (vFecha > clientesMap[cKey].ultimoPedidoFecha) {
+        clientesMap[cKey].ultimoPedidoFecha = vFecha
       }
     })
 
     const ingresosTotal = dynamicKpis.ingresosVentas
 
     return Object.values(clientesMap)
-      .sort((a, b) => b.totalComprado - a.totalComprado || b.pedidosCount - a.pedidosCount)
+      .sort((a, b) => b.totalComprado - a.totalComprado)
       .slice(0, 5)
-      .map((c) => {
+      .map(c => {
         let canalPreferido: string | null = null
         let maxCount = 0
         Object.entries(c.canales).forEach(([canal, count]) => {
@@ -438,7 +682,7 @@ export function DashboardClient({
       })
   }, [filteredVentas, rawVentas, dynamicKpis.ingresosVentas, initialTopClientes])
 
-  // 9. Top 5 Artículos más vendidos en el período seleccionado
+  // 9. Top 5 Juegos en el período seleccionado (Rentabilidad vs Volumen)
   const topArticulosDinamico = useMemo(() => {
     if (rawVentas.length === 0) return initialTopArticulos
 
@@ -448,17 +692,23 @@ export function DashboardClient({
       lineaCategoria: string
       unidadesVendidas: number
       totalFacturado: number
+      costoProduccionTotal: number
       pedidosCount: number
     }> = {}
 
     let totalUnidades = 0
 
     filteredVentas.forEach((v: any) => {
-      const nombre = v.nombreProductoSnapshot || v.producto?.nombreModelo || 'Artículo'
+      const nombre = v.nombreProductoSnapshot || v.producto?.nombreModelo || 'Juego'
       const artKey = (v.productoId || nombre).trim().toLowerCase()
       const categoria = v.producto?.lineaCategoria || 'General'
       const cant = Number(v.cantidad || 1)
       const sub = Number(v.total || 0)
+
+      const costoBaseUnit = v.costoBaseSnapshot != null && Number(v.costoBaseSnapshot) > 0 
+        ? Number(v.costoBaseSnapshot) 
+        : (Number(v.producto?.costoBase) || 0)
+      const costoProd = costoBaseUnit * cant
 
       if (!articulosMap[artKey]) {
         articulosMap[artKey] = {
@@ -467,12 +717,14 @@ export function DashboardClient({
           lineaCategoria: categoria,
           unidadesVendidas: 0,
           totalFacturado: 0,
+          costoProduccionTotal: 0,
           pedidosCount: 0
         }
       }
 
       articulosMap[artKey].unidadesVendidas += cant
       articulosMap[artKey].totalFacturado += sub
+      articulosMap[artKey].costoProduccionTotal += costoProd
       articulosMap[artKey].pedidosCount += 1
       totalUnidades += cant
     })
@@ -480,20 +732,269 @@ export function DashboardClient({
     const ingresosTotal = dynamicKpis.ingresosVentas
 
     return Object.values(articulosMap)
-      .sort((a, b) => b.unidadesVendidas - a.unidadesVendidas || b.totalFacturado - a.totalFacturado)
+      .map((art) => {
+        const gananciaNeta = Number((art.totalFacturado - art.costoProduccionTotal).toFixed(2))
+        const margenPorcentaje = art.totalFacturado > 0 
+          ? Number(((gananciaNeta / art.totalFacturado) * 100).toFixed(1)) 
+          : 0
+
+        return {
+          id: art.id,
+          nombreModelo: art.nombreModelo,
+          lineaCategoria: art.lineaCategoria,
+          unidadesVendidas: art.unidadesVendidas,
+          totalFacturado: Number(art.totalFacturado.toFixed(2)),
+          costoProduccionTotal: Number(art.costoProduccionTotal.toFixed(2)),
+          gananciaNeta,
+          margenPorcentaje,
+          pedidosCount: art.pedidosCount,
+          precioPromedio: art.unidadesVendidas > 0 ? Number((art.totalFacturado / art.unidadesVendidas).toFixed(2)) : 0,
+          porcentajeUnidades: totalUnidades > 0 ? Number(((art.unidadesVendidas / totalUnidades) * 100).toFixed(1)) : 0,
+          porcentajeFacturacion: ingresosTotal > 0 ? Number(((art.totalFacturado / ingresosTotal) * 100).toFixed(1)) : 0
+        }
+      })
+      .sort((a, b) => {
+        if (rankingArticulosMode === 'RENTABILIDAD') {
+          return b.gananciaNeta - a.gananciaNeta || b.totalFacturado - a.totalFacturado
+        }
+        return b.unidadesVendidas - a.unidadesVendidas || b.totalFacturado - a.totalFacturado
+      })
       .slice(0, 5)
-      .map((art) => ({
-        id: art.id,
-        nombreModelo: art.nombreModelo,
-        lineaCategoria: art.lineaCategoria,
-        unidadesVendidas: art.unidadesVendidas,
-        totalFacturado: Number(art.totalFacturado.toFixed(2)),
-        pedidosCount: art.pedidosCount,
-        precioPromedio: art.unidadesVendidas > 0 ? Number((art.totalFacturado / art.unidadesVendidas).toFixed(2)) : 0,
-        porcentajeUnidades: totalUnidades > 0 ? Number(((art.unidadesVendidas / totalUnidades) * 100).toFixed(1)) : 0,
-        porcentajeFacturacion: ingresosTotal > 0 ? Number(((art.totalFacturado / ingresosTotal) * 100).toFixed(1)) : 0
-      }))
-  }, [filteredVentas, rawVentas, dynamicKpis.ingresosVentas, initialTopArticulos])
+  }, [filteredVentas, rawVentas, dynamicKpis.ingresosVentas, initialTopArticulos, rankingArticulosMode])
+
+  // Funciones de renderizado para los 3 gráficos
+  const renderMargenChart = (data: any[], heightClass: string = 'h-full') => {
+    const displayData = soloDiasConVentas ? data.filter(d => d.ventaTotal > 0) : data
+    const chartData = displayData.length > 0 ? displayData : data
+
+    return (
+      <div className={`${heightClass} w-full`}>
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E5DCD3" vertical={false} opacity={0.5} />
+            <XAxis 
+              dataKey="fecha" 
+              stroke="#6B7280" 
+              fontSize={11} 
+              tickLine={false} 
+              axisLine={{ stroke: '#E5DCD3' }}
+              interval={chartData.length <= 10 ? 0 : 'preserveStartEnd'}
+              minTickGap={32}
+              tickFormatter={(val) => formatFechaEvolucion(val, false)}
+              dy={4}
+            />
+            <YAxis 
+              stroke="#6B7280" 
+              fontSize={11} 
+              tickLine={false} 
+              axisLine={false} 
+              tickFormatter={(val) => `${val}`}
+            />
+            <Tooltip content={<MargenTooltip />} />
+            <Legend 
+              verticalAlign="top"
+              content={() => (
+                <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] pb-2 text-[#6B7280]">
+                  <div className="flex items-center gap-1.5 font-medium">
+                    <span className="w-2.5 h-2.5 bg-[#059669] rounded-xs inline-block" />
+                    <span>Utilidad Neta</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 font-medium">
+                    <span className="w-2.5 h-2.5 bg-[#D1C7BD] rounded-xs inline-block" />
+                    <span>Costo Base / Compra</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 font-medium text-[#7C5835]">
+                    <span className="w-3.5 h-0.5 bg-[#7C5835] rounded-full inline-block" />
+                    <span>Venta Total</span>
+                  </div>
+                </div>
+              )}
+            />
+            <Bar 
+              dataKey="costoProduccion" 
+              name="Costo Base" 
+              stackId="venta" 
+              fill="#D1C7BD" 
+              radius={[0, 0, 0, 0]}
+              maxBarSize={32}
+            />
+            <Bar 
+              dataKey="utilidad" 
+              name="Utilidad Neta" 
+              stackId="venta" 
+              fill="#059669" 
+              radius={[4, 4, 0, 0]}
+              maxBarSize={32}
+            />
+            <Line 
+              type="monotone" 
+              dataKey="ventaTotal" 
+              name="Venta Total" 
+              stroke="#7C5835" 
+              strokeWidth={2} 
+              dot={{ r: 3, fill: '#7C5835', stroke: '#FFFFFF', strokeWidth: 1.5 }}
+              activeDot={{ r: 5, fill: '#7C5835', stroke: '#FFFFFF', strokeWidth: 2 }}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    )
+  }
+
+  const renderFlujoChart = (data: any[], heightClass: string = 'h-full') => (
+    <div className={`${heightClass} w-full`}>
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#E5DCD3" vertical={false} opacity={0.5} />
+          <XAxis 
+            dataKey="fecha" 
+            stroke="#6B7280" 
+            fontSize={11} 
+            tickLine={false} 
+            axisLine={{ stroke: '#E5DCD3' }}
+            interval={data.length <= 10 ? 0 : 'preserveStartEnd'}
+            minTickGap={32}
+            tickFormatter={(val) => formatFechaEvolucion(val, false)}
+            dy={4}
+          />
+          <YAxis 
+            stroke="#6B7280" 
+            fontSize={11} 
+            tickLine={false} 
+            axisLine={false} 
+            tickFormatter={(val) => `${val}`}
+          />
+          <Tooltip content={<FlujoCajaTooltip />} />
+          <Legend 
+            verticalAlign="top"
+            content={() => (
+              <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] pb-2 text-[#6B7280]">
+                <div className="flex items-center gap-1.5 font-medium">
+                  <span className="w-2.5 h-2.5 bg-[#059669] rounded-xs inline-block" />
+                  <span>Cobranzas (Entradas)</span>
+                </div>
+                <div className="flex items-center gap-1.5 font-medium">
+                  <span className="w-2.5 h-2.5 bg-[#DC2626] rounded-xs inline-block" />
+                  <span>Egresos & Compras</span>
+                </div>
+                <div className="flex items-center gap-1.5 font-medium text-[#1F2937]">
+                  <span className="w-3.5 h-0.5 bg-[#1F2937] rounded-full inline-block" />
+                  <span>Balance Neto</span>
+                </div>
+              </div>
+            )}
+          />
+          <ReferenceLine y={0} stroke="#D1D5DB" strokeWidth={1} />
+          <Bar 
+            dataKey="entradas" 
+            name="Entradas" 
+            fill="#059669" 
+            radius={[3, 3, 0, 0]}
+            maxBarSize={22}
+          />
+          <Bar 
+            dataKey="salidas" 
+            name="Salidas" 
+            fill="#DC2626" 
+            radius={[3, 3, 0, 0]}
+            maxBarSize={22}
+          />
+          <Line 
+            type="monotone" 
+            dataKey="balanceNeto" 
+            name="Balance Diario" 
+            stroke="#1F2937" 
+            strokeWidth={2} 
+            dot={{ r: 3, fill: '#1F2937', stroke: '#FFFFFF', strokeWidth: 1.5 }}
+            activeDot={{ r: 5, fill: '#1F2937', stroke: '#FFFFFF', strokeWidth: 2 }}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  )
+
+  const renderAcumuladoChart = (data: any[], heightClass: string = 'h-full') => (
+    <div className={`${heightClass} w-full`}>
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <defs>
+            <linearGradient id="colorIngresosAcum" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#059669" stopOpacity={0.25}/>
+              <stop offset="95%" stopColor="#059669" stopOpacity={0.0}/>
+            </linearGradient>
+            <linearGradient id="colorGastosAcum" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#DC2626" stopOpacity={0.15}/>
+              <stop offset="95%" stopColor="#DC2626" stopOpacity={0.0}/>
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="#E5DCD3" vertical={false} opacity={0.5} />
+          <XAxis 
+            dataKey="fecha" 
+            stroke="#6B7280" 
+            fontSize={11} 
+            tickLine={false} 
+            axisLine={{ stroke: '#E5DCD3' }}
+            interval={data.length <= 10 ? 0 : 'preserveStartEnd'}
+            minTickGap={32}
+            tickFormatter={(val) => formatFechaEvolucion(val, false)}
+            dy={4}
+          />
+          <YAxis 
+            stroke="#6B7280" 
+            fontSize={11} 
+            tickLine={false} 
+            axisLine={false} 
+            tickFormatter={(val) => `S/ ${val}`}
+          />
+          <Tooltip content={<CurvaAcumuladaTooltip />} />
+          <Legend 
+            verticalAlign="top"
+            content={() => (
+              <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] pb-2 text-[#6B7280]">
+                <div className="flex items-center gap-1.5 font-medium">
+                  <span className="w-2.5 h-2.5 bg-[#059669] rounded-xs inline-block" />
+                  <span>Cobranza Acumulada</span>
+                </div>
+                <div className="flex items-center gap-1.5 font-medium">
+                  <span className="w-2.5 h-2.5 bg-[#DC2626] rounded-xs inline-block" />
+                  <span>Gastos Acumulados</span>
+                </div>
+                <div className="flex items-center gap-1.5 font-medium text-[#7C5835]">
+                  <span className="w-3.5 h-0.5 bg-[#7C5835] rounded-full inline-block" />
+                  <span>Balance a la Fecha</span>
+                </div>
+              </div>
+            )}
+          />
+          <Area 
+            type="monotone" 
+            dataKey="ingresosAcum" 
+            name="Cobranza Acumulada" 
+            stroke="#059669" 
+            strokeWidth={2.5} 
+            fill="url(#colorIngresosAcum)" 
+          />
+          <Area 
+            type="monotone" 
+            dataKey="egresosAcum" 
+            name="Gastos Acumulados" 
+            stroke="#DC2626" 
+            strokeWidth={2} 
+            fill="url(#colorGastosAcum)" 
+            strokeDasharray="4 4"
+          />
+          <Line 
+            type="monotone" 
+            dataKey="balanceAcum" 
+            name="Balance Acumulado" 
+            stroke="#7C5835" 
+            strokeWidth={2} 
+            dot={false}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  )
 
   const handleManualRefresh = () => {
     setIsRefreshing(true)
@@ -504,7 +1005,7 @@ export function DashboardClient({
   return (
     <div className="space-y-5 animate-in fade-in duration-300 pb-10 max-w-7xl mx-auto">
       {/* ========================================================================= */}
-      {/* 1. HEADER MINIMALISTA CON FILTRO DE PERÍODO (MES ACTUAL POR DEFECTO)      */}
+      {/* 1. HEADER MINIMALISTA CON FILTRO DE PERÍODO (HISTÓRICO POR DEFECTO)        */}
       {/* ========================================================================= */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
         <div>
@@ -631,7 +1132,7 @@ export function DashboardClient({
               {formatCurrency(dynamicKpis.ticketPromedio)}
             </div>
             <div className="flex items-center gap-1.5 mt-1 text-xs text-[#6B7280] truncate">
-              <span>Costo prod: {formatCurrency(dynamicKpis.costoFabricacionTotal)}</span>
+              <span>Costo base: {formatCurrency(dynamicKpis.costoFabricacionTotal)}</span>
             </div>
           </div>
         </div>
@@ -643,169 +1144,345 @@ export function DashboardClient({
       {/* ========================================================================= */}
       <div className="grid gap-4 grid-cols-1 lg:grid-cols-12">
         
-        {/* Gráfico de Evolución (8 cols) */}
+        {/* Gráfico de Evolución y Análisis Financiero (8 cols) */}
         <Card className="lg:col-span-8 bg-white border-[#E5DCD3] shadow-xs rounded-2xl overflow-hidden flex flex-col justify-between">
           <CardHeader className="p-4 sm:p-5 pb-2">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <CardTitle className="text-[#1F2937] text-sm sm:text-base font-black">
-                  Evolución Financiera
-                </CardTitle>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <CardTitle className="text-[#1F2937] text-sm sm:text-base font-black">
+                    {EVOLUCION_CONFIG[evolucionTab].title}
+                  </CardTitle>
+                  {evolucionTab === 'MARGEN' && (
+                    <button
+                      type="button"
+                      onClick={() => setSoloDiasConVentas(!soloDiasConVentas)}
+                      className="text-[10px] text-[#7C5835] hover:text-[#5B4026] bg-[#FAF7F4] hover:bg-[#F2ECE4] border border-[#E5DCD3] px-2 py-0.5 rounded-md font-semibold cursor-pointer transition-colors"
+                      title="Alternar entre ver solo días con ventas o todo el calendario"
+                    >
+                      {soloDiasConVentas ? '⚡ Solo días con ventas' : '📅 Todo el calendario'}
+                    </button>
+                  )}
+                </div>
                 <CardDescription className="text-xs text-[#6B7280]">
-                  Utilidad neta diaria y volumen de facturación
+                  {EVOLUCION_CONFIG[evolucionTab].description}
                 </CardDescription>
+              </div>
+
+              {/* Selector de los 3 gráficos */}
+              <div className="flex items-center p-0.5 rounded-xl bg-[#FAF8F5] border border-[#E2D9CC] shrink-0 overflow-x-auto max-w-full">
+                <button
+                  type="button"
+                  onClick={() => setEvolucionTab('MARGEN')}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    evolucionTab === 'MARGEN'
+                      ? 'bg-[#A36F4C] text-white shadow-2xs'
+                      : 'text-[#75695D] hover:text-[#241C15]'
+                  }`}
+                >
+                  Margen Pedidos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEvolucionTab('FLUJO')}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    evolucionTab === 'FLUJO'
+                      ? 'bg-[#A36F4C] text-white shadow-2xs'
+                      : 'text-[#75695D] hover:text-[#241C15]'
+                  }`}
+                >
+                  Flujo de Caja
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEvolucionTab('ACUMULADO')}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    evolucionTab === 'ACUMULADO'
+                      ? 'bg-[#A36F4C] text-white shadow-2xs'
+                      : 'text-[#75695D] hover:text-[#241C15]'
+                  }`}
+                >
+                  Curva Acumulada
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEvolucionTab('TODOS')}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    evolucionTab === 'TODOS'
+                      ? 'bg-[#A36F4C] text-white shadow-2xs'
+                      : 'text-[#75695D] hover:text-[#241C15]'
+                  }`}
+                >
+                  Ver los 3
+                </button>
               </div>
             </div>
           </CardHeader>
 
           <CardContent className="p-3 sm:p-5 pt-0">
-            <div className="h-[280px] sm:h-[320px] w-full">
-              {graficoFiltrado.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-xs text-[#6B7280] italic">
-                  No hay movimientos registrados en el período seleccionado.
+            {metricasEvolucion.length === 0 ? (
+              <div className="h-[280px] flex items-center justify-center text-xs text-[#6B7280] italic">
+                No hay movimientos registrados en el período seleccionado.
+              </div>
+            ) : evolucionTab === 'MARGEN' ? (
+              <div className="h-[280px] sm:h-[320px] w-full">
+                {renderMargenChart(metricasEvolucion)}
+              </div>
+            ) : evolucionTab === 'FLUJO' ? (
+              <div className="h-[280px] sm:h-[320px] w-full">
+                {renderFlujoChart(metricasEvolucion)}
+              </div>
+            ) : evolucionTab === 'ACUMULADO' ? (
+              <div className="h-[280px] sm:h-[320px] w-full">
+                {renderAcumuladoChart(metricasEvolucion)}
+              </div>
+            ) : (
+              <div className="space-y-6 pt-2">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-bold text-[#1F2937]">1. Margen Comercial por Pedido</span>
+                    <span className="text-[10px] text-[#6B7280]">Rentabilidad directa de juegos vendidos</span>
+                  </div>
+                  <div className="h-[230px] w-full">
+                    {renderMargenChart(metricasEvolucion)}
+                  </div>
                 </div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={graficoFiltrado} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E5DCD3" vertical={false} opacity={0.5} />
-                    
-                    <XAxis 
-                      dataKey="fecha" 
-                      stroke="#6B7280" 
-                      fontSize={11} 
-                      tickLine={false} 
-                      axisLine={{ stroke: '#E5DCD3' }}
-                      tickFormatter={(val) => formatFechaEvolucion(val, false)}
-                      dy={4}
-                    />
-                    
-                    <YAxis 
-                      stroke="#6B7280" 
-                      fontSize={11} 
-                      tickLine={false} 
-                      axisLine={false} 
-                      tickFormatter={(val) => val === 0 ? '0' : val < 0 ? `-${Math.abs(val)}` : `${val}`}
-                    />
-                    
-                    <Tooltip content={<CustomEvolucionTooltip />} />
-                    <Legend content={<CustomEvolutionLegend />} verticalAlign="top" />
 
-                    <ReferenceLine y={0} stroke="#D1D5DB" strokeWidth={1} />
+                <div className="border-t border-[#F5EFEB] pt-4">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-bold text-[#1F2937]">2. Flujo Diario de Caja Real</span>
+                    <span className="text-[10px] text-[#6B7280]">Cobranzas efectivas vs. egresos de la tienda</span>
+                  </div>
+                  <div className="h-[230px] w-full">
+                    {renderFlujoChart(metricasEvolucion)}
+                  </div>
+                </div>
 
-                    <Bar 
-                      dataKey="ganancia" 
-                      name="Resultado Neto" 
-                      radius={[3, 3, 3, 3]}
-                      maxBarSize={28}
-                    >
-                      {graficoFiltrado.map((entry, index) => (
-                        <Cell 
-                          key={`bar-cell-${index}`} 
-                          fill={entry.ganancia >= 0 ? '#059669' : '#DC2626'} 
-                        />
-                      ))}
-                    </Bar>
-
-                    <Line 
-                      type="monotone" 
-                      dataKey="ingresos" 
-                      name="Facturación"
-                      stroke="#7C5835" 
-                      strokeWidth={2} 
-                      dot={{ r: 3, fill: '#7C5835', stroke: '#FFFFFF', strokeWidth: 1.5 }}
-                      activeDot={{ r: 5, fill: '#7C5835', stroke: '#FFFFFF', strokeWidth: 2 }}
-                    />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              )}
-            </div>
+                <div className="border-t border-[#F5EFEB] pt-4">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-bold text-[#1F2937]">3. Curva Acumulativa del Período</span>
+                    <span className="text-[10px] text-[#6B7280]">Crecimiento acumulado y punto de equilibrio</span>
+                  </div>
+                  <div className="h-[230px] w-full">
+                    {renderAcumuladoChart(metricasEvolucion)}
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Donut de Gastos (4 cols) */}
+        {/* Donut de Gastos vs Ingresos / Categorías (4 cols) */}
         <Card className="lg:col-span-4 bg-white border-[#E5DCD3] shadow-xs rounded-2xl overflow-hidden flex flex-col justify-between">
           <CardHeader className="p-4 sm:p-5 pb-0">
-            <CardTitle className="text-[#1F2937] text-sm sm:text-base font-black">
-              Distribución de Gastos
-            </CardTitle>
-            <CardDescription className="text-xs text-[#6B7280]">
-              Egresos e inversiones en el taller
-            </CardDescription>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <CardTitle className="text-[#1F2937] text-sm sm:text-base font-black">
+                  {distribucionMode === 'VS' ? 'Gastos vs Ingresos' : 'Distribución de Gastos'}
+                </CardTitle>
+                <CardDescription className="text-xs text-[#6B7280]">
+                  {distribucionMode === 'VS' ? 'Relación de flujo y balance en caja' : 'Egresos y compras de la tienda'}
+                </CardDescription>
+              </div>
+
+              {/* Selector de Modo */}
+              <div className="flex items-center p-0.5 rounded-xl bg-[#FAF8F5] border border-[#E2D9CC] shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setDistribucionMode('VS')}
+                  className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                    distribucionMode === 'VS'
+                      ? 'bg-[#A36F4C] text-white shadow-2xs'
+                      : 'text-[#75695D] hover:text-[#241C15]'
+                  }`}
+                >
+                  Vs Ingresos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDistribucionMode('CATEGORIAS')}
+                  className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                    distribucionMode === 'CATEGORIAS'
+                      ? 'bg-[#A36F4C] text-white shadow-2xs'
+                      : 'text-[#75695D] hover:text-[#241C15]'
+                  }`}
+                >
+                  Categorías
+                </button>
+              </div>
+            </div>
           </CardHeader>
 
           <CardContent className="p-4 pt-0 space-y-3">
-            {/* Gráfico Donut */}
-            <div className="h-[180px] w-full flex items-center justify-center relative">
-              {graficoInversionDinamico.length === 0 ? (
-                <div className="text-xs text-[#6B7280] italic text-center">
-                  Sin egresos en el período seleccionado.
+            {distribucionMode === 'VS' ? (
+              <>
+                {/* Gráfico Donut: Gastos vs Ingresos */}
+                <div className="h-[180px] w-full flex items-center justify-center relative">
+                  {comparativaIngresosGastos.dataDonut.length === 0 ? (
+                    <div className="text-xs text-[#6B7280] italic text-center">
+                      Sin movimientos en el período seleccionado.
+                    </div>
+                  ) : (
+                    <>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={comparativaIngresosGastos.dataDonut}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={54}
+                            outerRadius={78}
+                            paddingAngle={3}
+                            dataKey="value"
+                            stroke="#FFFFFF"
+                            strokeWidth={2}
+                          >
+                            {comparativaIngresosGastos.dataDonut.map((entry, index) => (
+                              <Cell key={`cell-vs-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: '#FFFFFF', border: '1px solid #E5DCD3', borderRadius: '12px', fontSize: '11px' }}
+                            formatter={(val: any, name: any) => [`S/ ${Number(val).toFixed(2)}`, name]}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+
+                      <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
+                        <span className="text-[10px] text-[#6B7280] uppercase font-bold tracking-wider">
+                          {comparativaIngresosGastos.balance >= 0 ? 'Superávit' : 'Déficit'}
+                        </span>
+                        <span className={`text-sm sm:text-base font-black font-mono tabular-nums ${
+                          comparativaIngresosGastos.balance >= 0 ? 'text-[#059669]' : 'text-[#DC2626]'
+                        }`}>
+                          {comparativaIngresosGastos.balance >= 0 ? '+' : ''}{formatCurrency(comparativaIngresosGastos.balance)}
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
-              ) : (
-                <>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={graficoInversionDinamico}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={54}
-                        outerRadius={78}
-                        paddingAngle={3}
-                        dataKey="value"
-                        stroke="#FFFFFF"
-                        strokeWidth={2}
-                      >
-                        {graficoInversionDinamico.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={DONUT_COLORS[index % DONUT_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#FFFFFF', border: '1px solid #E5DCD3', borderRadius: '12px', fontSize: '11px' }}
-                        formatter={(val: any) => [`S/ ${Number(val).toFixed(2)}`, 'Gasto']}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
 
-                  <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
-                    <span className="text-[10px] text-[#6B7280] uppercase font-bold">Total</span>
-                    <span className="text-sm sm:text-base font-black text-[#1F2937] font-mono tabular-nums">
-                      {formatCurrency(totalEgresosCalculado)}
-                    </span>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Lista minimalista de categorías */}
-            <div className="space-y-1.5 pt-2 border-t border-[#F5EFEB]">
-              {graficoInversionDinamico.map((item, idx) => {
-                const pct = totalEgresosCalculado > 0 ? ((item.value / totalEgresosCalculado) * 100).toFixed(0) : '0'
-                const color = DONUT_COLORS[idx % DONUT_COLORS.length]
-
-                return (
-                  <div key={item.name} className="flex items-center justify-between text-xs py-0.5">
+                {/* Desglose comparativo Ingresos vs Gastos */}
+                <div className="space-y-2 pt-2 border-t border-[#F5EFEB]">
+                  {/* Fila 1: Ingresos */}
+                  <div className="flex items-center justify-between text-xs py-0.5">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                      <span className="text-[#1F2937] truncate text-[11px] font-medium">{item.name}</span>
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-[#059669]" />
+                      <span className="text-[#1F2937] text-[11px] font-semibold">Ingresos Cobrados</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="font-mono font-semibold text-[#1F2937] tabular-nums text-[11px]">
-                        {formatCurrency(item.value)}
+                      <span className="font-mono font-bold text-[#059669] tabular-nums text-[11px]">
+                        {formatCurrency(comparativaIngresosGastos.ingresos)}
                       </span>
-                      <span className="text-[10px] text-[#6B7280] font-mono w-7 text-right">
-                        {pct}%
+                      <span className="text-[10px] text-[#6B7280] font-mono w-8 text-right font-medium">
+                        {comparativaIngresosGastos.ingresosPct}%
                       </span>
                     </div>
                   </div>
-                )
-              })}
-            </div>
+
+                  {/* Fila 2: Gastos */}
+                  <div className="flex items-center justify-between text-xs py-0.5">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-[#DC2626]" />
+                      <span className="text-[#1F2937] text-[11px] font-semibold">Gastos & Egresos</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-mono font-bold text-[#DC2626] tabular-nums text-[11px]">
+                        {formatCurrency(comparativaIngresosGastos.egresos)}
+                      </span>
+                      <span className="text-[10px] text-[#6B7280] font-mono w-8 text-right font-medium">
+                        {comparativaIngresosGastos.egresosPct}%
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Fila 3: Flujo Neto */}
+                  <div className="flex items-center justify-between text-xs pt-1.5 border-t border-[#F5EFEB]/80">
+                    <span className="text-[11px] text-[#75695D] font-medium">Flujo Neto en Caja</span>
+                    <span className={`font-mono font-black text-xs tabular-nums ${
+                      comparativaIngresosGastos.balance >= 0 ? 'text-[#059669]' : 'text-[#DC2626]'
+                    }`}>
+                      {comparativaIngresosGastos.balance >= 0 ? '+' : ''}{formatCurrency(comparativaIngresosGastos.balance)}
+                    </span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Gráfico Donut: Por Categorías */}
+                <div className="h-[180px] w-full flex items-center justify-center relative">
+                  {graficoInversionDinamico.length === 0 ? (
+                    <div className="text-xs text-[#6B7280] italic text-center">
+                      Sin egresos en el período seleccionado.
+                    </div>
+                  ) : (
+                    <>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={graficoInversionDinamico}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={54}
+                            outerRadius={78}
+                            paddingAngle={3}
+                            dataKey="value"
+                            stroke="#FFFFFF"
+                            strokeWidth={2}
+                          >
+                            {graficoInversionDinamico.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={DONUT_COLORS[index % DONUT_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: '#FFFFFF', border: '1px solid #E5DCD3', borderRadius: '12px', fontSize: '11px' }}
+                            formatter={(val: any) => [`S/ ${Number(val).toFixed(2)}`, 'Gasto']}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+
+                      <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
+                        <span className="text-[10px] text-[#6B7280] uppercase font-bold">Total Egresos</span>
+                        <span className="text-sm sm:text-base font-black text-[#1F2937] font-mono tabular-nums">
+                          {formatCurrency(totalEgresosCalculado)}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Lista minimalista de categorías */}
+                <div className="space-y-1.5 pt-2 border-t border-[#F5EFEB]">
+                  {graficoInversionDinamico.map((item, idx) => {
+                    const pct = totalEgresosCalculado > 0 ? ((item.value / totalEgresosCalculado) * 100).toFixed(0) : '0'
+                    const color = DONUT_COLORS[idx % DONUT_COLORS.length]
+
+                    return (
+                      <div key={item.name} className="flex items-center justify-between text-xs py-0.5">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                          <span className="text-[#1F2937] truncate text-[11px] font-medium">{item.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="font-mono font-semibold text-[#1F2937] tabular-nums text-[11px]">
+                            {formatCurrency(item.value)}
+                          </span>
+                          <span className="text-[10px] text-[#6B7280] font-mono w-7 text-right">
+                            {pct}%
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
 
       {/* ========================================================================= */}
-      {/* 4. RANKINGS COMERCIALES (TOP 5 CLIENTES & TOP 5 ARTÍCULOS)                */}
+      {/* 4. RANKINGS COMERCIALES (TOP 5 CLIENTES & TOP 5 JUEGOS)                   */}
       {/* ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
         
@@ -855,7 +1532,7 @@ export function DashboardClient({
                         {c.cliente}
                       </h4>
                       <p className="text-[11px] text-[#6B7280] truncate">
-                        {c.pedidosCount} {c.pedidosCount === 1 ? 'pedido' : 'pedidos'} • {c.piezasCount} piezas
+                        {c.pedidosCount} {c.pedidosCount === 1 ? 'pedido' : 'pedidos'} • {c.piezasCount} {c.piezasCount === 1 ? 'juego' : 'juegos'}
                         {c.canalPreferido && ` • ${c.canalPreferido}`}
                       </p>
                     </div>
@@ -883,31 +1560,60 @@ export function DashboardClient({
           </CardContent>
         </Card>
 
-        {/* TOP 5 ARTÍCULOS MÁS VENDIDOS */}
+        {/* TOP 5 JUEGOS MÁS RENTABLES / MÁS VENDIDOS */}
         <Card className="bg-white border-[#E5DCD3] shadow-xs rounded-2xl overflow-hidden flex flex-col justify-between">
           <CardHeader className="p-4 sm:p-5 pb-3 border-b border-[#F5EFEB]">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <Package className="h-4 w-4 text-[#7C5835]" />
+                <Dice5 className="h-4 w-4 text-[#7C5835]" />
                 <CardTitle className="text-sm sm:text-base font-black text-[#1F2937]">
-                  Top Artículos Vendidos
+                  {rankingArticulosMode === 'RENTABILIDAD' ? 'Top Juegos Más Rentables' : 'Top Juegos Más Vendidos'}
                 </CardTitle>
               </div>
-              <Link
-                href="/catalogo"
-                className="inline-flex items-center gap-1 text-xs font-semibold text-[#7C5835] hover:text-[#5E4328] hover:underline"
-              >
-                <span>Ver catálogo</span>
-                <ArrowUpRight className="h-3 w-3" />
-              </Link>
+
+              {/* Selector de ordenamiento: Rentabilidad vs Volumen */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center p-0.5 rounded-lg bg-[#FAF8F5] border border-[#E2D9CC] shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setRankingArticulosMode('RENTABILIDAD')}
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                      rankingArticulosMode === 'RENTABILIDAD'
+                        ? 'bg-[#059669] text-white shadow-2xs'
+                        : 'text-[#75695D] hover:text-[#241C15]'
+                    }`}
+                  >
+                    💰 Ganancia
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRankingArticulosMode('VOLUMEN')}
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                      rankingArticulosMode === 'VOLUMEN'
+                        ? 'bg-[#A36F4C] text-white shadow-2xs'
+                        : 'text-[#75695D] hover:text-[#241C15]'
+                    }`}
+                  >
+                    📦 Unidades
+                  </button>
+                </div>
+
+                <Link
+                  href="/catalogo"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-[#7C5835] hover:text-[#5E4328] hover:underline shrink-0"
+                >
+                  <span>Catálogo</span>
+                  <ArrowUpRight className="h-3 w-3" />
+                </Link>
+              </div>
             </div>
           </CardHeader>
 
           <CardContent className="p-0 flex-1 divide-y divide-[#F5EFEB]">
             {topArticulosDinamico.length === 0 ? (
               <div className="py-8 text-center text-xs text-[#6B7280] space-y-2">
-                <Package className="h-6 w-6 text-[#B8A99A] mx-auto opacity-50" />
-                <p>No hay artículos despachados en este período.</p>
+                <Dice5 className="h-6 w-6 text-[#B8A99A] mx-auto opacity-50" />
+                <p>No hay juegos despachados en este período.</p>
               </div>
             ) : (
               topArticulosDinamico.map((art, index) => (
@@ -920,8 +1626,8 @@ export function DashboardClient({
                       {index + 1}
                     </span>
 
-                    <div className="w-7 h-7 rounded-lg bg-[#FAF7F4] border border-[#E5DCD3] text-[#7C5835] flex items-center justify-center shrink-0">
-                      <Package className="h-3.5 w-3.5" />
+                    <div className="w-8 h-8 rounded-lg bg-[#FAF7F4] border border-[#E5DCD3] text-[#7C5835] flex items-center justify-center shrink-0">
+                      <Dice5 className="h-4 w-4" />
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -929,17 +1635,19 @@ export function DashboardClient({
                         {art.nombreModelo}
                       </h4>
                       <p className="text-[11px] text-[#6B7280] truncate">
-                        {art.lineaCategoria || 'General'} • en {art.pedidosCount} {art.pedidosCount === 1 ? 'pedido' : 'pedidos'}
+                        {art.unidadesVendidas} {art.unidadesVendidas === 1 ? 'unidad' : 'unidades'} • en {art.pedidosCount} {art.pedidosCount === 1 ? 'pedido' : 'pedidos'}
+                        <span className="mx-1">•</span>
+                        <span>Ventas: {formatCurrency(art.totalFacturado)}</span>
                       </p>
                     </div>
                   </div>
 
                   <div className="text-right shrink-0">
-                    <div className="text-xs sm:text-sm font-mono font-bold text-[#1F2937] tabular-nums">
-                      {art.unidadesVendidas} <span className="font-sans text-[10px] text-[#6B7280] font-normal">unds.</span>
+                    <div className="text-xs sm:text-sm font-mono font-black text-[#059669] tabular-nums">
+                      +{formatCurrency(art.gananciaNeta || 0)}
                     </div>
-                    <div className="text-[10px] font-mono text-[#059669]">
-                      {formatCurrency(art.totalFacturado)}
+                    <div className="text-[10px] font-medium text-[#6B7280]">
+                      {art.margenPorcentaje != null ? `${art.margenPorcentaje.toFixed(0)}% margen` : ''}
                     </div>
                   </div>
                 </div>
@@ -952,4 +1660,3 @@ export function DashboardClient({
     </div>
   )
 }
-

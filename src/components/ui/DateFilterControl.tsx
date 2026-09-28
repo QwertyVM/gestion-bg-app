@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Calendar, ChevronDown, Check, X, RotateCcw } from 'lucide-react'
-import { DatePreset, DateRange, getPresetDateRange, getMonthYearDateRange, MESES_ES, formatToYMD } from '@/lib/date-utils'
+import { Calendar, ChevronDown, Check, RotateCcw } from 'lucide-react'
+import { DatePreset, DateRange, getPresetDateRange, MESES_ES, formatFechaEvolucion } from '@/lib/date-utils'
 
 interface DateFilterControlProps {
   value: DateRange
@@ -22,15 +22,7 @@ export function DateFilterControl({
   showAllOption = true,
 }: DateFilterControlProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const [customFrom, setCustomFrom] = useState(value.from || '')
-  const [customTo, setCustomTo] = useState(value.to || '')
   const dropdownRef = useRef<HTMLDivElement>(null)
-
-  // Sync internal custom inputs if value changes externally
-  useEffect(() => {
-    if (value.from) setCustomFrom(value.from)
-    if (value.to) setCustomTo(value.to)
-  }, [value.from, value.to])
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -53,60 +45,39 @@ export function DateFilterControl({
     setIsOpen(false)
   }
 
-  const handleApplyCustom = () => {
-    if (customFrom || customTo) {
-      onChange({
-        from: customFrom || null,
-        to: customTo || null,
-        preset: 'PERSONALIZADO'
-      })
-      setIsOpen(false)
-    }
-  }
-
-  const handleSelectMonth = (monthIndex: number, year: number) => {
-    const newRange = getMonthYearDateRange(year, monthIndex + 1)
-    onChange(newRange)
-    setIsOpen(false)
-  }
-
   // Label description for button display
   const getDisplayLabel = () => {
     if (value.preset === 'ESTE_MES') {
       const now = new Date()
       return `${MESES_ES[now.getMonth()]} ${now.getFullYear()} (Mes Actual)`
     }
-    if (value.preset === 'MES_ANTERIOR') {
-      const prev = new Date()
-      prev.setMonth(prev.getMonth() - 1)
-      return `${MESES_ES[prev.getMonth()]} ${prev.getFullYear()} (Mes Anterior)`
+    if (value.preset === 'ESTA_SEMANA') {
+      if (value.from && value.to) {
+        return `Esta Semana (${formatFechaEvolucion(value.from)} - ${formatFechaEvolucion(value.to)})`
+      }
+      return 'Esta Semana (Lun - Dom)'
     }
-    if (value.preset === 'ULTIMOS_30_DIAS') {
-      return 'Últimos 30 días'
+    if (value.preset === 'SEMANA_ANTERIOR') {
+      if (value.from && value.to) {
+        return `Semana Pasada (${formatFechaEvolucion(value.from)} - ${formatFechaEvolucion(value.to)})`
+      }
+      return 'Semana Pasada (Lun - Dom)'
     }
-    if (value.preset === 'ESTE_ANIO') {
-      return `Año ${new Date().getFullYear()}`
+    if (value.preset === 'ULTIMOS_3_MESES') {
+      return 'Hace 3 meses'
     }
     if (value.preset === 'TODO') {
-      return 'Todo el Historial'
+      return 'Histórico'
     }
     if (value.from && value.to) {
-      return `${value.from} al ${value.to}`
+      return `${formatFechaEvolucion(value.from)} - ${formatFechaEvolucion(value.to)}`
     }
-    if (value.from) {
-      return `Desde ${value.from}`
-    }
-    if (value.to) {
-      return `Hasta ${value.to}`
-    }
-    return 'Seleccionar Fecha'
+    return 'Histórico'
   }
 
-  const currentYear = new Date().getFullYear()
-  const years = [currentYear - 1, currentYear, currentYear + 1]
-
-  const isCurrentMonthActive = value.preset === 'ESTE_MES'
   const isAllActive = value.preset === 'TODO'
+  const estaSemanaRange = getPresetDateRange('ESTA_SEMANA')
+  const semanaAnteriorRange = getPresetDateRange('SEMANA_ANTERIOR')
 
   return (
     <div className={`relative inline-block text-left ${className}`} ref={dropdownRef}>
@@ -121,7 +92,7 @@ export function DateFilterControl({
         }`}
       >
         <Calendar className={`h-3.5 w-3.5 shrink-0 ${!isAllActive ? 'text-[#A36F4C]' : 'text-[#75695D]'}`} />
-        <span className="truncate max-w-[190px] sm:max-w-[240px]">{getDisplayLabel()}</span>
+        <span className="truncate max-w-[210px] sm:max-w-[280px]">{getDisplayLabel()}</span>
         <ChevronDown className="h-3 w-3 text-[#75695D] shrink-0" />
       </button>
 
@@ -138,153 +109,97 @@ export function DateFilterControl({
               <Calendar className="h-3.5 w-3.5 text-[#A36F4C]" />
               {label}
             </span>
-            {value.preset !== 'ESTE_MES' && (
+            {value.preset !== 'TODO' && (
               <button
                 type="button"
-                onClick={() => handleSelectPreset('ESTE_MES')}
+                onClick={() => handleSelectPreset('TODO')}
                 className="text-[10px] text-[#A36F4C] hover:underline font-bold flex items-center gap-1 cursor-pointer"
               >
                 <RotateCcw className="h-2.5 w-2.5" />
-                Ir a Mes Actual
+                Ir a Histórico
               </button>
             )}
           </div>
 
           {/* Quick Preset Buttons */}
-          <div className="grid grid-cols-2 gap-1.5">
+          <div className="flex flex-col gap-1.5">
+            {showAllOption && (
+              <button
+                type="button"
+                onClick={() => handleSelectPreset('TODO')}
+                className={`px-3 py-2 rounded-lg text-xs font-bold text-left transition-colors flex items-center justify-between cursor-pointer ${
+                  value.preset === 'TODO'
+                    ? 'bg-[#75695D] text-white shadow-2xs'
+                    : 'bg-[#FAF8F5] text-[#75695D] hover:text-[#241C15] hover:bg-[#F4EFEA]'
+                }`}
+              >
+                <span>🌐 Histórico</span>
+                {value.preset === 'TODO' && <Check className="h-3.5 w-3.5" />}
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => handleSelectPreset('ESTE_MES')}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold text-left transition-colors flex items-center justify-between cursor-pointer ${
+              className={`px-3 py-2 rounded-lg text-xs font-bold text-left transition-colors flex items-center justify-between cursor-pointer ${
                 value.preset === 'ESTE_MES'
                   ? 'bg-[#A36F4C] text-white shadow-2xs'
                   : 'bg-[#F8F6F2] text-[#241C15] hover:bg-[#EFE5D8]'
               }`}
             >
-              <span>📅 Mes Actual</span>
-              {value.preset === 'ESTE_MES' && <Check className="h-3 w-3" />}
+              <span>📅 Mes Actual ({MESES_ES[new Date().getMonth()]})</span>
+              {value.preset === 'ESTE_MES' && <Check className="h-3.5 w-3.5" />}
             </button>
 
             <button
               type="button"
-              onClick={() => handleSelectPreset('MES_ANTERIOR')}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold text-left transition-colors flex items-center justify-between cursor-pointer ${
-                value.preset === 'MES_ANTERIOR'
+              onClick={() => handleSelectPreset('ESTA_SEMANA')}
+              className={`px-3 py-2 rounded-lg text-xs font-bold text-left transition-colors flex items-center justify-between cursor-pointer ${
+                value.preset === 'ESTA_SEMANA'
                   ? 'bg-[#A36F4C] text-white shadow-2xs'
                   : 'bg-[#F8F6F2] text-[#241C15] hover:bg-[#EFE5D8]'
               }`}
             >
-              <span>⏮️ Mes Anterior</span>
-              {value.preset === 'MES_ANTERIOR' && <Check className="h-3 w-3" />}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleSelectPreset('ULTIMOS_30_DIAS')}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold text-left transition-colors flex items-center justify-between cursor-pointer ${
-                value.preset === 'ULTIMOS_30_DIAS'
-                  ? 'bg-[#A36F4C] text-white shadow-2xs'
-                  : 'bg-[#F8F6F2] text-[#241C15] hover:bg-[#EFE5D8]'
-              }`}
-            >
-              <span>⏱️ Últimos 30 días</span>
-              {value.preset === 'ULTIMOS_30_DIAS' && <Check className="h-3 w-3" />}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleSelectPreset('ESTE_ANIO')}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold text-left transition-colors flex items-center justify-between cursor-pointer ${
-                value.preset === 'ESTE_ANIO'
-                  ? 'bg-[#A36F4C] text-white shadow-2xs'
-                  : 'bg-[#F8F6F2] text-[#241C15] hover:bg-[#EFE5D8]'
-              }`}
-            >
-              <span>🗓️ Este Año ({currentYear})</span>
-              {value.preset === 'ESTE_ANIO' && <Check className="h-3 w-3" />}
-            </button>
-          </div>
-
-          {/* Quick Month Matrix Picker */}
-          <div className="pt-2 border-t border-[#E2D9CC]/70 space-y-1.5">
-            <span className="text-[10px] font-bold text-[#75695D] uppercase tracking-wider block">
-              Seleccionar Mes Específico ({currentYear}):
-            </span>
-            <div className="grid grid-cols-4 gap-1">
-              {MESES_ES.map((mes, idx) => {
-                const now = new Date()
-                const isThisMonth = now.getFullYear() === currentYear && now.getMonth() === idx
-                return (
-                  <button
-                    key={mes}
-                    type="button"
-                    onClick={() => handleSelectMonth(idx, currentYear)}
-                    className={`py-1 text-[11px] rounded font-bold transition-colors cursor-pointer text-center ${
-                      value.preset === 'PERSONALIZADO' && value.from === formatToYMD(new Date(currentYear, idx, 1))
-                        ? 'bg-[#A36F4C] text-white'
-                        : isThisMonth
-                        ? 'bg-[#FDF6E2] text-[#8C6D1F] border border-[#E8D49B] hover:bg-[#F9ECCF]'
-                        : 'bg-[#FAF8F5] text-[#75695D] hover:text-[#241C15] hover:bg-[#F4EFEA]'
-                    }`}
-                  >
-                    {mes.substring(0, 3)}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Custom Date Range */}
-          <div className="pt-2 border-t border-[#E2D9CC]/70 space-y-2">
-            <span className="text-[10px] font-bold text-[#75695D] uppercase tracking-wider block">
-              Rango Personalizado:
-            </span>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[9px] font-semibold text-[#75695D] block mb-0.5">Desde</label>
-                <input
-                  type="date"
-                  value={customFrom}
-                  onChange={(e) => setCustomFrom(e.target.value)}
-                  className="w-full h-8 px-2 rounded-lg border border-[#E2D9CC] bg-[#F8F6F2] text-xs font-mono font-medium text-[#241C15] focus:bg-white outline-none"
-                />
+              <div className="flex flex-col">
+                <span>📆 Esta Semana (Lun - Dom)</span>
+                <span className={`text-[10px] font-normal ${value.preset === 'ESTA_SEMANA' ? 'text-white/80' : 'text-[#75695D]'}`}>
+                  {formatFechaEvolucion(estaSemanaRange.from!)} - {formatFechaEvolucion(estaSemanaRange.to!)}
+                </span>
               </div>
-              <div>
-                <label className="text-[9px] font-semibold text-[#75695D] block mb-0.5">Hasta</label>
-                <input
-                  type="date"
-                  value={customTo}
-                  onChange={(e) => setCustomTo(e.target.value)}
-                  className="w-full h-8 px-2 rounded-lg border border-[#E2D9CC] bg-[#F8F6F2] text-xs font-mono font-medium text-[#241C15] focus:bg-white outline-none"
-                />
-              </div>
-            </div>
+              {value.preset === 'ESTA_SEMANA' && <Check className="h-3.5 w-3.5 shrink-0" />}
+            </button>
+
             <button
               type="button"
-              onClick={handleApplyCustom}
-              disabled={!customFrom && !customTo}
-              className="w-full h-8 rounded-lg bg-[#241C15] hover:bg-[#3D3126] text-white text-xs font-bold shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
+              onClick={() => handleSelectPreset('SEMANA_ANTERIOR')}
+              className={`px-3 py-2 rounded-lg text-xs font-bold text-left transition-colors flex items-center justify-between cursor-pointer ${
+                value.preset === 'SEMANA_ANTERIOR'
+                  ? 'bg-[#A36F4C] text-white shadow-2xs'
+                  : 'bg-[#F8F6F2] text-[#241C15] hover:bg-[#EFE5D8]'
+              }`}
             >
-              Aplicar Rango
+              <div className="flex flex-col">
+                <span>⏪ Semana Pasada (Última semana)</span>
+                <span className={`text-[10px] font-normal ${value.preset === 'SEMANA_ANTERIOR' ? 'text-white/80' : 'text-[#75695D]'}`}>
+                  {formatFechaEvolucion(semanaAnteriorRange.from!)} - {formatFechaEvolucion(semanaAnteriorRange.to!)}
+                </span>
+              </div>
+              {value.preset === 'SEMANA_ANTERIOR' && <Check className="h-3.5 w-3.5 shrink-0" />}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSelectPreset('ULTIMOS_3_MESES')}
+              className={`px-3 py-2 rounded-lg text-xs font-bold text-left transition-colors flex items-center justify-between cursor-pointer ${
+                value.preset === 'ULTIMOS_3_MESES'
+                  ? 'bg-[#A36F4C] text-white shadow-2xs'
+                  : 'bg-[#F8F6F2] text-[#241C15] hover:bg-[#EFE5D8]'
+              }`}
+            >
+              <span>⏱️ Hace 3 meses</span>
+              {value.preset === 'ULTIMOS_3_MESES' && <Check className="h-3.5 w-3.5" />}
             </button>
           </div>
-
-          {/* Option for All Time */}
-          {showAllOption && (
-            <div className="pt-1.5 border-t border-[#E2D9CC]/70">
-              <button
-                type="button"
-                onClick={() => handleSelectPreset('TODO')}
-                className={`w-full py-1.5 rounded-lg text-xs font-bold text-center transition-colors cursor-pointer ${
-                  value.preset === 'TODO'
-                    ? 'bg-[#75695D] text-white'
-                    : 'bg-[#FAF8F5] text-[#75695D] hover:text-[#241C15] hover:bg-[#F4EFEA]'
-                }`}
-              >
-                🌐 Ver Todo el Historial Acumulado
-              </button>
-            </div>
-          )}
         </div>
       )}
     </div>
