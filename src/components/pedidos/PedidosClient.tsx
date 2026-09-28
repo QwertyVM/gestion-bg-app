@@ -50,7 +50,6 @@ import { DateRange, getPresetDateRange, isDateInRange } from '@/lib/date-utils'
 import { EstadoPedido, TipoPrecio } from '@prisma/client'
 import { createPedido, updateEstadoPedido, updatePedido, addPagoPedido, deletePedido } from '@/actions/pedidos'
 import { formatDate } from '@/lib/utils'
-import { MultiColorPicker } from '@/components/ui/MultiColorPicker'
 
 export interface ItemPedidoView {
   id: string
@@ -154,14 +153,14 @@ export interface FilamentoOption {
 interface PedidosClientProps {
   pedidosIniciales: PedidoView[]
   productos: ProductoOption[]
-  filamentos: FilamentoOption[]
+  filamentos?: FilamentoOption[]
 }
 
 interface FormItemState {
   id: string
   productoId: string
-  colorFilamentoId: string
-  coloresIds: string[]
+  colorFilamentoId?: string
+  coloresIds?: string[]
   personalizacion: string
   cantidad: number | string
   tipoPrecio: TipoPrecio
@@ -169,13 +168,6 @@ interface FormItemState {
   costoPackaging: number | string
   porcentajeAdicional: number
   gramosConsumidos: number
-}
-
-function getDefaultFilamentoId(fils: FilamentoOption[]): string {
-  if (!fils || fils.length === 0) return ''
-  const negro = fils.find(f => f.nombreColor.toLowerCase().includes('negro'))
-  if (negro) return negro.id
-  return fils[0]?.id || ''
 }
 
 const ESTADOS_CONFIG: Record<EstadoPedido, { label: string; colorBg: string; colorText: string; colorBorder: string; icon: any }> = {
@@ -271,20 +263,17 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
   // Lista dinámica de ítems
   const [formItems, setFormItems] = useState<FormItemState[]>(() => {
     const defaultProd = productos[0]
-    const defaultFilId = getDefaultFilamentoId(filamentos)
     return [
       {
         id: 'item-1',
         productoId: defaultProd ? defaultProd.id : '',
-        colorFilamentoId: defaultFilId,
-        coloresIds: defaultFilId ? [defaultFilId] : [],
         personalizacion: '',
         cantidad: 1,
         tipoPrecio: 'MERCADO',
         precioUnitario: defaultProd ? defaultProd.precioMercado : '',
         costoPackaging: '',
         porcentajeAdicional: 0,
-        gramosConsumidos: defaultProd ? defaultProd.pesoGramos : 0
+        gramosConsumidos: 0
       }
     ]
   })
@@ -296,21 +285,18 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
   // =========================================================================
   const addItem = () => {
     const defaultProd = productos[0]
-    const defaultFilId = getDefaultFilamentoId(filamentos)
     setFormItems(prev => [
       ...prev,
       {
         id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         productoId: defaultProd ? defaultProd.id : '',
-        colorFilamentoId: defaultFilId,
-        coloresIds: defaultFilId ? [defaultFilId] : [],
         personalizacion: '',
         cantidad: 1,
         tipoPrecio: 'MERCADO',
         precioUnitario: defaultProd ? defaultProd.precioMercado : '',
         costoPackaging: '',
         porcentajeAdicional: 0,
-        gramosConsumidos: defaultProd ? defaultProd.pesoGramos : 0
+        gramosConsumidos: 0
       }
     ])
   }
@@ -325,7 +311,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
       if (item.id !== id) return item
       const merged = { ...item, ...updates }
 
-      // Si cambió el producto, recalcular precio y gramos base
+      // Si cambió el producto, recalcular precio
       if (updates.productoId && updates.productoId !== item.productoId) {
         const p = productos.find(prod => prod.id === updates.productoId)
         if (p) {
@@ -333,7 +319,6 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
           if (merged.tipoPrecio === 'AMIGOS') pUnit = p.precioAmigos
           else if (merged.tipoPrecio === 'MERCADO') pUnit = p.precioMercado
           merged.precioUnitario = pUnit
-          merged.gramosConsumidos = p.pesoGramos * (Number(merged.cantidad) || 1)
         }
       }
 
@@ -343,14 +328,6 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
         if (p) {
           if (updates.tipoPrecio === 'AMIGOS') merged.precioUnitario = p.precioAmigos
           else if (updates.tipoPrecio === 'MERCADO') merged.precioUnitario = p.precioMercado
-        }
-      }
-
-      // Si cambió la cantidad, actualizar gramos estimados
-      if (updates.cantidad !== undefined) {
-        const p = productos.find(prod => prod.id === merged.productoId)
-        if (p && p.pesoGramos) {
-          merged.gramosConsumidos = p.pesoGramos * (Number(merged.cantidad) || 0)
         }
       }
 
@@ -383,7 +360,6 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
   // =========================================================================
   const resetForm = () => {
     const defaultProd = productos[0]
-    const defaultFilId = getDefaultFilamentoId(filamentos)
     setFormFecha(new Date().toISOString().split('T')[0])
     setFormCliente('')
     setFormTelefono('')
@@ -400,15 +376,13 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
       {
         id: 'item-1',
         productoId: defaultProd ? defaultProd.id : '',
-        colorFilamentoId: defaultFilId,
-        coloresIds: defaultFilId ? [defaultFilId] : [],
         personalizacion: '',
         cantidad: 1,
         tipoPrecio: 'MERCADO',
         precioUnitario: defaultProd ? defaultProd.precioMercado : '',
         costoPackaging: '',
         porcentajeAdicional: 0,
-        gramosConsumidos: defaultProd ? defaultProd.pesoGramos : 0
+        gramosConsumidos: 0
       }
     ])
   }
@@ -445,7 +419,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
         descontarStock: formDescontarStock,
         items: formItems.map(it => ({
           productoId: it.productoId,
-          colorFilamentoId: it.coloresIds?.[0] || it.colorFilamentoId || undefined,
+          colorFilamentoId: it.colorFilamentoId || undefined,
           coloresIds: it.coloresIds || [],
           personalizacion: it.personalizacion.trim() || undefined,
           cantidad: Number(it.cantidad) || 1,
@@ -453,7 +427,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
           precioUnitario: Number(it.precioUnitario) || 0,
           costoPackaging: Number(it.costoPackaging) || 0,
           porcentajeAdicional: Number(it.porcentajeAdicional) || 0,
-          gramosConsumidos: Number(it.gramosConsumidos) || 0
+          gramosConsumidos: 0
         }))
       })
 
@@ -654,7 +628,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
     const envioText = p.costoEnvio > 0 ? `\n🚚 *Envío / Destino:* S/ ${p.costoEnvio.toFixed(2)} (${p.destinoEnvio || 'Agencia'})` : ''
     const saldoText = p.saldoPendiente > 0 ? `\n⏳ *Saldo Pendiente:* S/ ${p.saldoPendiente.toFixed(2)}` : '\n✅ *Estado Pago:* 100% Cancelado'
 
-    const ticketMsg = `*RESUMEN DE PEDIDO 3D — ${p.codigo}*\n` +
+    const ticketMsg = `*RESUMEN DE PEDIDO — ${p.codigo}*\n` +
       `👤 *Cliente:* ${p.cliente}\n` +
       `📅 *Fecha:* ${formatDate(p.fecha)}\n` +
       (p.diaEntregaPrometida ? `📦 *Entrega Pactada:* ${p.diaEntregaPrometida}\n` : '') +
@@ -662,7 +636,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
       `💳 *Medio de Pago:* ${p.metodoPago || (p.pagos?.[0]?.metodoPago) || 'YAPE'}\n` +
       `💰 *Total Pedido:* S/ ${p.total.toFixed(2)}\n` +
       `💳 *Abonado:* S/ ${p.montoPagado.toFixed(2)}${saldoText}\n\n` +
-      `_¡Gracias por tu pedido en NOVA 3D!_`
+      `_¡Gracias por tu pedido en NOVA Board Games!_`
 
     navigator.clipboard.writeText(ticketMsg)
     setCopiedNotification(true)
@@ -807,7 +781,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
           </div>
           <div className="flex items-baseline gap-1.5 flex-wrap">
             <span className="font-mono text-xl font-black text-[#1F2937] tabular-nums">{kpis.totalPedidos}</span>
-            <span className="text-xs text-[#75695D]">({kpis.totalPiezas} piezas)</span>
+            <span className="text-xs text-[#75695D]">({kpis.totalPiezas} unidades)</span>
           </div>
         </div>
 
@@ -821,7 +795,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
           </div>
           <div className="flex items-baseline gap-1.5 flex-wrap">
             <span className="font-mono text-xl font-black text-[#2B6CB0] tabular-nums">{kpis.enProduccion}</span>
-            <span className="text-xs text-[#75695D]">en taller</span>
+            <span className="text-xs text-[#75695D]">en preparación</span>
           </div>
         </div>
 
@@ -1089,11 +1063,11 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
                           <div className="space-y-0.5">
                             <div className="flex items-center gap-1.5">
                               <span className="font-bold text-xs text-[#241C15]">
-                                {p.totalItemsCount} {p.totalItemsCount === 1 ? 'pieza' : 'piezas'}
+                                {p.totalItemsCount} {p.totalItemsCount === 1 ? 'unidad' : 'unidades'}
                               </span>
                               {p.items.length > 1 && (
                                 <span className="text-xs text-[#75695D]">
-                                  ({p.items.length} modelos)
+                                  ({p.items.length} productos)
                                 </span>
                               )}
                             </div>
@@ -1249,7 +1223,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
                   <span>Registrar Pedido Multiproducto</span>
                 </h3>
                 <p className="text-xs text-[#75695D] mt-0.5">
-                  Agrega 1 o más modelos a este pedido, asigna filamentos y calcula el balance automáticamente.
+                  Agrega 1 o más productos a este pedido y calcula el balance automáticamente.
                 </p>
               </div>
 
@@ -1318,7 +1292,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
                       <option value="TikTok">TikTok</option>
                       <option value="Feria">Feria / Presencial</option>
                       <option value="Recomendación">Recomendación</option>
-                      <option value="Directo">Directo / Taller</option>
+                      <option value="Directo">Directo / Tienda</option>
                     </select>
                   </div>
                 </div>
@@ -1393,36 +1367,21 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
                           )}
                         </div>
 
-                        {/* Fila 1: Selector de Producto y Color */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <Label className="text-[11px] text-[#241C15] font-bold">Modelo 3D *</Label>
-                            <select
-                              required
-                              value={item.productoId}
-                              onChange={(e) => updateItem(item.id, { productoId: e.target.value })}
-                              className="w-full h-9 rounded-xl border border-[#E2D9CC] bg-[#FFFFFF] px-3 text-xs text-[#241C15] font-bold"
-                            >
-                              {productos.map(p => (
-                                <option key={p.id} value={p.id}>
-                                  {p.nombreModelo} ({p.lineaCategoria}) — Base: S/ {p.costoBase.toFixed(2)}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div className="space-y-1">
-                            <MultiColorPicker
-                              selectedColorIds={item.coloresIds || []}
-                              onChange={(cols) => updateItem(item.id, { 
-                                coloresIds: cols, 
-                                colorFilamentoId: cols[0] || '' 
-                              })}
-                              filamentos={filamentos}
-                              label="Color(es) de Filamento"
-                              placeholder="Sin asignar (Multicolor / Varios colores)"
-                            />
-                          </div>
+                        {/* Fila 1: Selector de Producto */}
+                        <div className="space-y-1">
+                          <Label className="text-[11px] text-[#241C15] font-bold">Producto *</Label>
+                          <select
+                            required
+                            value={item.productoId}
+                            onChange={(e) => updateItem(item.id, { productoId: e.target.value })}
+                            className="w-full h-9 rounded-xl border border-[#E2D9CC] bg-[#FFFFFF] px-3 text-xs text-[#241C15] font-bold"
+                          >
+                            {productos.map(p => (
+                              <option key={p.id} value={p.id}>
+                                {p.nombreModelo} ({p.lineaCategoria}) — Base: S/ {p.costoBase.toFixed(2)}
+                              </option>
+                            ))}
+                          </select>
                         </div>
 
                         {/* Fila 2: Nivel de Precio, Cantidad, Precio Unitario y Packaging */}
@@ -1484,7 +1443,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-[#E2D9CC]/60 text-xs">
                           <div className="flex-1">
                             <Input
-                              placeholder="Personalización / Texto grabado / Notas del modelo..."
+                              placeholder="Notas o detalles del producto (opcional)..."
                               value={item.personalizacion}
                               onChange={(e) => updateItem(item.id, { personalizacion: e.target.value })}
                               className="h-8 bg-[#FFFFFF] border-[#E2D9CC] text-xs rounded-lg placeholder:text-[#75695D]"
@@ -1600,7 +1559,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
                     onChange={(e) => setFormDescontarStock(e.target.checked)}
                     className="rounded text-[#1E5E3A] focus:ring-[#1E5E3A] cursor-pointer"
                   />
-                  <span>Descontar automáticamente gramos estimados de las bobinas seleccionadas</span>
+                  <span>Descontar automáticamente del stock disponible de los productos</span>
                 </label>
               </div>
 
@@ -1720,7 +1679,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
                 </div>
                 <div>
                   <span className="text-[10px] text-[#75695D] block">Destino / Envío:</span>
-                  <strong className="text-[#241C15]">{selectedPedidoDetail.destinoEnvio || 'Taller'}</strong>
+                  <strong className="text-[#241C15]">{selectedPedidoDetail.destinoEnvio || 'Tienda'}</strong>
                 </div>
               </div>
 
@@ -1738,11 +1697,11 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
                   Productos Asignados al Pedido ({selectedPedidoDetail.items.length})
                 </span>
 
-                <div className="border border-[#E2D9CC] rounded-2xl overflow-x-auto w-full">
-                  <Table className="min-w-[500px]">
+                <div className="border border-[#E2D9CC] rounded-2xl overflow-hidden w-full">
+                  <Table className="w-full">
                     <TableHeader className="bg-[#FAF8F5]">
                       <TableRow className="border-[#E2D9CC]">
-                        <TableHead className="text-xs font-extrabold text-[#241C15]">Modelo / Producto</TableHead>
+                        <TableHead className="text-xs font-extrabold text-[#241C15]">Producto</TableHead>
                         <TableHead className="text-xs font-extrabold text-[#241C15] text-center">Cant.</TableHead>
                         <TableHead className="text-xs font-extrabold text-[#241C15] text-right">P. Unit</TableHead>
                         <TableHead className="text-xs font-extrabold text-[#241C15] text-right">Subtotal</TableHead>
@@ -2026,7 +1985,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
                       <option value="TikTok">TikTok</option>
                       <option value="Feria">Feria / Presencial</option>
                       <option value="Recomendación">Recomendación</option>
-                      <option value="Directo">Directo / Taller</option>
+                      <option value="Directo">Directo / Tienda</option>
                     </select>
                   </div>
                 </div>
@@ -2110,36 +2069,21 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
                           )}
                         </div>
 
-                        {/* Fila 1: Selector de Producto y Color */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <Label className="text-[11px] text-[#241C15] font-bold">Modelo 3D *</Label>
-                            <select
-                              required
-                              value={item.productoId}
-                              onChange={(e) => updateItem(item.id, { productoId: e.target.value })}
-                              className="w-full h-9 rounded-xl border border-[#E2D9CC] bg-[#FFFFFF] px-3 text-xs text-[#241C15] font-bold"
-                            >
-                              {productos.map(p => (
-                                <option key={p.id} value={p.id}>
-                                  {p.nombreModelo} ({p.lineaCategoria}) — Base: S/ {p.costoBase.toFixed(2)}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div className="space-y-1">
-                            <MultiColorPicker
-                              selectedColorIds={item.coloresIds || []}
-                              onChange={(cols) => updateItem(item.id, { 
-                                coloresIds: cols, 
-                                colorFilamentoId: cols[0] || '' 
-                              })}
-                              filamentos={filamentos}
-                              label="Color(es) de Filamento"
-                              placeholder="Sin asignar (Multicolor / Varios colores)"
-                            />
-                          </div>
+                        {/* Fila 1: Selector de Producto */}
+                        <div className="space-y-1">
+                          <Label className="text-[11px] text-[#241C15] font-bold">Producto *</Label>
+                          <select
+                            required
+                            value={item.productoId}
+                            onChange={(e) => updateItem(item.id, { productoId: e.target.value })}
+                            className="w-full h-9 rounded-xl border border-[#E2D9CC] bg-[#FFFFFF] px-3 text-xs text-[#241C15] font-bold"
+                          >
+                            {productos.map(p => (
+                              <option key={p.id} value={p.id}>
+                                {p.nombreModelo} ({p.lineaCategoria}) — Base: S/ {p.costoBase.toFixed(2)}
+                              </option>
+                            ))}
+                          </select>
                         </div>
 
                         {/* Fila 2: Nivel de Precio, Cantidad, Precio Unitario y Packaging */}
@@ -2201,7 +2145,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-[#E2D9CC]/60 text-xs">
                           <div className="flex-1">
                             <Input
-                              placeholder="Personalización / Texto grabado / Notas del modelo..."
+                              placeholder="Notas o detalles del producto (opcional)..."
                               value={item.personalizacion}
                               onChange={(e) => updateItem(item.id, { personalizacion: e.target.value })}
                               className="h-8 bg-[#FFFFFF] border-[#E2D9CC] text-xs rounded-lg placeholder:text-[#75695D]"

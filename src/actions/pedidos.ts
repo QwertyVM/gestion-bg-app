@@ -385,9 +385,24 @@ export async function createPedido(data: CreatePedidoInput) {
       return fullPedido || p
     })
 
-    // 4. Stock deduction if requested (split evenly across all selected colors)
+    // 4. Stock deduction if requested
     if (data.descontarStock) {
       for (const item of processedItems) {
+        // Descontar stock del producto (Juego de Mesa)
+        if (item.productoId && item.cantidad > 0) {
+          try {
+            await prisma.producto.update({
+              where: { id: item.productoId },
+              data: {
+                stock: { decrement: item.cantidad }
+              }
+            })
+          } catch (stkErr) {
+            console.warn(`No se pudo descontar stock del producto ${item.productoId}:`, stkErr)
+          }
+        }
+
+        // Compatibilidad con bobinas si hubieran filamentos asociados
         if (item.coloresIds && item.coloresIds.length > 0 && item.gramosConsumidos > 0) {
           const splitGramos = Number((item.gramosConsumidos / item.coloresIds.length).toFixed(1))
           for (const cId of item.coloresIds) {
@@ -654,7 +669,7 @@ export async function updatePedido(id: string, data: UpdatePedidoInput) {
       return {
         pedidoId: id,
         productoId: item.productoId,
-        nombreProductoSnapshot: prod?.nombreModelo || 'Modelo 3D',
+        nombreProductoSnapshot: prod?.nombreModelo || 'Juego de Mesa',
         costoBaseSnapshot: prod ? Number(prod.costoBase) : 0,
         colorFilamentoId: rawColores[0] || item.colorFilamentoId || null,
         coloresIds: rawColores,
