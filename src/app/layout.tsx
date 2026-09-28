@@ -10,8 +10,8 @@ import { Toaster } from 'sonner'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'NOVA App - Gestión Multi-Negocio (3D & BG)',
-  description: 'Panel de gestión para impresión 3D y juegos de mesa',
+  title: 'NOVA Board Games - Sistema de Gestión',
+  description: 'Panel de administración y gestión para NOVA Board Games',
 }
 
 export const viewport: Viewport = {

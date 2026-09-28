@@ -58,26 +58,22 @@ export function TabBannersHero({ negocio, banners, onRefresh }: TabBannersHeroPr
   const [previewBadge, setPreviewBadge] = useState('')
   const [previewTitle, setPreviewTitle] = useState('')
   const [previewRating, setPreviewRating] = useState('5.0 Calidad Garantizada')
-  const [colorAcento, setColorAcento] = useState(negocio === '3D' ? '#f59e0b' : '#0066ff')
+  const [colorAcento, setColorAcento] = useState('#0066ff')
   const [orden, setOrden] = useState(0)
 
   const handleOpenCreate = () => {
     setEditingBanner(null)
-    setTag(negocio === '3D' ? 'NOVEDAD 3D 2026' : 'COLECCIÓN OFICIAL 2026')
-    setTitulo(negocio === '3D' ? 'Impresiones 3D & Accesorios' : 'Tu Pasión por los Juegos de Mesa')
-    setResaltado(negocio === '3D' ? 'Diseño y Precisión.' : 'Elevada al Máximo.')
-    setSubtitulo(
-      negocio === '3D'
-        ? 'Fabricación aditiva de piezas a medida, miniaturas y componentes de alta resistencia.'
-        : 'Descubre juegos de mesa, organizadores a medida y accesorios exclusivos.'
-    )
+    setTag('COLECCIÓN OFICIAL 2026')
+    setTitulo('Tu Pasión por los Juegos de Mesa')
+    setResaltado('Elevada al Máximo.')
+    setSubtitulo('Descubre juegos de mesa, expansiones y accesorios exclusivos.')
     setCtaTexto('Explorar Catálogo')
     setCtaLink('/categoria/todos')
     setImagenUrl('')
-    setPreviewBadge(negocio === '3D' ? 'CALIDAD PRO 3D' : 'EDICIÓN OFICIAL')
-    setPreviewTitle(negocio === '3D' ? 'Piezas & Accesorios' : 'Sets Completos')
+    setPreviewBadge('EDICIÓN OFICIAL')
+    setPreviewTitle('Sets Completos')
     setPreviewRating('5.0 Calidad Garantizada')
-    setColorAcento(negocio === '3D' ? '#f59e0b' : '#0066ff')
+    setColorAcento('#0066ff')
     setOrden(banners.length + 1)
     setModalOpen(true)
   }
@@ -94,7 +90,7 @@ export function TabBannersHero({ negocio, banners, onRefresh }: TabBannersHeroPr
     setPreviewBadge(b.previewBadge || '')
     setPreviewTitle(b.previewTitle || '')
     setPreviewRating(b.previewRating || '5.0 Calidad Garantizada')
-    setColorAcento(b.colorAcento || (negocio === '3D' ? '#f59e0b' : '#0066ff'))
+    setColorAcento(b.colorAcento || '#0066ff')
     setOrden(b.orden || 0)
     setModalOpen(true)
   }

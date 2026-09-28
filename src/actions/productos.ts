@@ -10,8 +10,6 @@ function safeRevalidate() {
   try {
     revalidatePath('/catalogo')
     revalidatePath('/catalogo/productos')
-    revalidatePath('/catalogo/inventario')
-    revalidatePath('/inventario')
     revalidatePath('/ventas')
     revalidatePath('/pedidos')
     revalidatePath('/')

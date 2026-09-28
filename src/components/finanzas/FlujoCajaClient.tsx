@@ -19,7 +19,6 @@ import {
   Wrench, 
   ShoppingBag, 
   Truck, 
-  TrendingUp, 
   BarChart3,
   Calendar
 } from 'lucide-react'
@@ -508,14 +507,6 @@ export function FlujoCajaClient({
             <BarChart3 className="h-3.5 w-3.5 text-[#A36F4C]" />
             <span>{showChart ? "Ocultar Gráfico" : "Ver Gráfico"}</span>
           </button>
-
-          <Link
-            href="/historico-mensual"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#FAF8F5] hover:bg-[#F4EFEA] text-[#633E20] border border-[#D4BEA7] shadow-2xs transition-all"
-          >
-            <TrendingUp className="h-3.5 w-3.5 text-[#A36F4C]" />
-            <span>Histórico</span>
-          </Link>
         </div>
       </div>
 

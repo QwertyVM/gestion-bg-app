@@ -20,7 +20,6 @@ import {
   CheckCircle2,
   ExternalLink,
   Info,
-  Printer,
   Dice5,
   Eye,
   EyeOff,
@@ -83,45 +82,7 @@ export function TabIdentidadContacto({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-          {/* 3D Section Toggle Card */}
-          <div
-            className={`p-4 rounded-xl border transition-all ${
-              formData.habilitarSeccion3d
-                ? 'bg-amber-50/50 border-amber-200'
-                : 'bg-gray-50 border-gray-200 opacity-75'
-            }`}
-          >
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <div className="flex items-center gap-2">
-                <div
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center ${
-                    formData.habilitarSeccion3d ? 'bg-amber-500 text-white' : 'bg-gray-300 text-gray-600'
-                  }`}
-                >
-                  <Printer className="w-4 h-4" />
-                </div>
-                <span className="font-bold text-xs text-[#241C15]">Sección Impresión 3D</span>
-              </div>
-
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.habilitarSeccion3d}
-                  onChange={(e) => handleChange('habilitarSeccion3d', e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
-              </label>
-            </div>
-
-            <p className="text-[11px] text-[#75695D] leading-relaxed">
-              {formData.habilitarSeccion3d
-                ? '✅ Sección 3D activa. Los clientes pueden alternar al catálogo de accesorios y piezas 3D.'
-                : '🚫 Sección 3D desactivada. La tienda web ocultará la pestaña 3D y se enfocará 100% en Juegos de Mesa.'}
-            </p>
-          </div>
-
+        <div className="grid grid-cols-1 gap-4 pt-1">
           {/* BG Section Toggle Card */}
           <div
             className={`p-4 rounded-xl border transition-all ${

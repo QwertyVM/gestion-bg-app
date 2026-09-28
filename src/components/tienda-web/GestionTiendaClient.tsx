@@ -48,7 +48,7 @@ export function GestionTiendaClient({
   initialFavoritos,
 }: GestionTiendaClientProps) {
   const router = useRouter()
-  const { negocio, setNegocio, is3D, isBG, config } = useBusiness()
+  const { negocio, config } = useBusiness()
   const [activeTab, setActiveTab] = useState<TabType>('identidad')
   const [storeConfig, setStoreConfig] = useState<ConfiguracionTiendaData>(initialConfig)
 
@@ -63,13 +63,11 @@ export function GestionTiendaClient({
 
   return (
     <div className="space-y-6 pb-12">
-      {/* 1. TOP HEADER & BUSINESS SWITCHER */}
+      {/* 1. TOP HEADER */}
       <div className="bg-white rounded-2xl border border-[#E2D9CC] p-5 sm:p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
           <div
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-white shadow-xs ${
-              is3D ? 'bg-amber-600' : 'bg-indigo-600'
-            }`}
+            className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-white shadow-xs bg-indigo-600"
           >
             <Store className="w-6 h-6" />
           </div>
@@ -79,47 +77,19 @@ export function GestionTiendaClient({
                 Gestión de la Store Web
               </h1>
               <span
-                className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${
-                  is3D
-                    ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                    : 'bg-indigo-50 text-indigo-800 border border-indigo-200'
-                }`}
+                className="text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider bg-indigo-50 text-indigo-800 border border-indigo-200"
               >
-                Perfil {negocio}
+                NOVA Board Games (BG)
               </span>
             </div>
             <p className="text-xs text-[#75695D] mt-0.5">
-              Administra la configuración, ofertas, cupones, banners e inventario que impactan en vivo la tienda online.
+              Administra la configuración, ofertas, cupones, banners e inventario que impactan en vivo la tienda online de NOVA BG.
             </p>
           </div>
         </div>
 
-        {/* Action buttons: Switch business & View Store */}
-        <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
-          {/* Business switcher tabs */}
-          <div className="flex items-center bg-[#F8F6F2] p-1 rounded-xl border border-[#E2D9CC] text-xs">
-            <button
-              onClick={() => setNegocio('3D')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-                is3D
-                  ? 'bg-amber-600 text-white shadow-xs'
-                  : 'text-[#75695D] hover:text-[#241C15]'
-              }`}
-            >
-              Tienda 3D
-            </button>
-            <button
-              onClick={() => setNegocio('BG')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-                isBG
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-[#75695D] hover:text-[#241C15]'
-              }`}
-            >
-              Tienda BG
-            </button>
-          </div>
-
+        {/* Action buttons: View Store */}
+        <div className="flex items-center gap-2.5">
           {/* Open Store Link */}
           <a
             href="http://localhost:3000"

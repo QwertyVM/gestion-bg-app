@@ -10,7 +10,6 @@ function safeRevalidate() {
     revalidatePath('/finanzas')
     revalidatePath('/finanzas/ingresos')
     revalidatePath('/finanzas/flujo-caja')
-    revalidatePath('/finanzas/proyecciones')
     revalidatePath('/')
   } catch (e) {
     // Ignore outside request context

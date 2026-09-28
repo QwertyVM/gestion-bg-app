@@ -51,7 +51,7 @@ export function TabOfertasCupones({ negocio, cupones, onRefresh }: TabOfertasCup
 
   const handleOpenCreate = () => {
     setEditingCupon(null)
-    setCodigo(negocio === '3D' ? 'NOVA3D10' : 'NOVABG10')
+    setCodigo('NOVABG10')
     setDescripcion('Descuento de bienvenida por inauguración de la tienda web')
     setTipo('PORCENTAJE')
     setValor(10)

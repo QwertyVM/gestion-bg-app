@@ -19,9 +19,7 @@ export async function getDashboardData(negocio?: TipoNegocio) {
       where: { negocio: targetNegocio },
       orderBy: { fecha: 'desc' }
     }),
-    targetNegocio === '3D' ? prisma.inventarioFilamento.findMany({
-      where: { activo: true }
-    }) : Promise.resolve([])
+    Promise.resolve([] as any[])
   ])
 
   // 1. Egresos / Inversión Total en el Taller (Maquinaria + Insumos + Servicios)
@@ -327,7 +325,7 @@ export async function getDashboardData(negocio?: TipoNegocio) {
     // Artículos del pedido
     if (Array.isArray(p.items)) {
       p.items.forEach((it) => {
-        const nombre = it.nombreProductoSnapshot || it.producto?.nombreModelo || 'Artículo 3D'
+        const nombre = it.nombreProductoSnapshot || it.producto?.nombreModelo || 'Juego de Mesa'
         const artKey = (it.productoId || nombre).trim().toLowerCase()
         const categoria = it.producto?.lineaCategoria || 'General'
         const cant = Number(it.cantidad || 1)

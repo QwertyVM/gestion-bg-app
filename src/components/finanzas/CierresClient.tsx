@@ -23,7 +23,6 @@ import {
   X, 
   ArrowRight, 
   Loader2, 
-  Landmark, 
   Wallet,
   Sparkles,
   FileCheck,
@@ -179,12 +178,6 @@ export function CierresClient({ cierres: initialCierres, datosPreCierre }: Cierr
         </div>
 
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto">
-          <Link href="/finanzas/proyecciones" className="flex-1 sm:flex-initial">
-            <Button variant="outline" className="w-full sm:w-auto border-[#E2D9CC] bg-[#FFFFFF] text-[#241C15] hover:bg-[#F4EFEA] hover:border-[#DCD3C6] cursor-pointer rounded-xl text-xs h-10 shadow-sm font-medium">
-              <Landmark className="h-4 w-4 mr-1.5 text-[#A36F4C]" />
-              Tesorería
-            </Button>
-          </Link>
 
           <Button 
             onClick={handleOpenWizard}

@@ -108,7 +108,7 @@ export function CatalogoClient({
   categoriasIniciales = [] 
 }: CatalogoClientProps) {
   const router = useRouter()
-  const { is3D, isBG } = useBusiness()
+  const { isBG } = useBusiness()
   const [productos, setProductos] = useState<ProductoItem[]>(initialProductos)
   const [categorias, setCategorias] = useState<CategoriaItem[]>(categoriasIniciales)
 
@@ -187,7 +187,7 @@ export function CatalogoClient({
       p.id,
       p.bggId ?? '',
       p.nombreModelo,
-      p.negocio || (isBG ? 'BG' : '3D')
+      p.negocio || 'BG'
     ])
 
     const escapeCsv = (val: string | number | null | undefined) => {
@@ -210,7 +210,7 @@ export function CatalogoClient({
     const dateStr = new Date().toISOString().split('T')[0]
     const fileSuffix = onlyWithBgg ? 'bgg' : 'catalogo'
     link.href = url
-    link.download = `productos_${fileSuffix}_${(isBG ? 'bg' : '3d')}_${dateStr}.csv`
+    link.download = `productos_${fileSuffix}_bg_${dateStr}.csv`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -535,11 +535,11 @@ export function CatalogoClient({
     setFormData({
       nombreModelo: '',
       lineaCategoria: categoryNamesList[0] || 'General',
-      pesoGramos: is3D ? '150' : '0',
-      tiempoHoras: is3D ? '4.5' : '0',
-      costoBase: is3D ? '9.75' : '0',
-      precioAmigos: is3D ? '18.00' : '0',
-      precioMercado: is3D ? '30.00' : '0',
+      pesoGramos: '0',
+      tiempoHoras: '0',
+      costoBase: '0',
+      precioAmigos: '0',
+      precioMercado: '0',
       activo: true,
       stock: '0',
       controlarStock: false,
@@ -747,10 +747,10 @@ export function CatalogoClient({
           <div>
             <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-[#241C15] tracking-tight flex items-center gap-2.5">
               <Boxes className="h-6 w-6 sm:h-7 sm:w-7 text-[#A36F4C] flex-shrink-0" />
-              <span>Catálogo de Productos</span>
+              <span>Catálogo de Juegos</span>
             </h1>
             <p className="text-xs sm:text-sm text-[#75695D] mt-1">
-              {is3D ? 'Modelos 3D disponibles con costos base, tiempos de impresión y precios escalonados.' : 'Juegos de mesa disponibles para venta online y presencial.'}
+              Juegos de mesa disponibles para venta online y presencial.
             </p>
           </div>
 
@@ -803,7 +803,7 @@ export function CatalogoClient({
                     className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-[#FAF8F5] transition-colors flex items-center justify-between text-xs font-semibold text-[#241C15] cursor-pointer"
                   >
                     <div className="flex flex-col">
-                      <span>Catálogo completo ({isBG ? 'BG' : '3D'})</span>
+                      <span>Catálogo completo (BG)</span>
                       <span className="text-[10px] text-[#75695D] font-normal">Todos los productos con columna BGG</span>
                     </div>
                     <span className="px-2 py-0.5 rounded-full bg-[#FAF8F5] border border-[#E2D9CC] text-[#75695D] text-[10px] font-bold">
@@ -1407,7 +1407,7 @@ export function CatalogoClient({
       </div>
 
       {/* ========================================================================= */}
-      {/* 5. MODAL: CREAR / EDITAR PRODUCTO 3D (2 COLUMNAS)                         */}
+      {/* 5. MODAL: CREAR / EDITAR PRODUCTO (2 COLUMNAS)                           */}
       {/* ========================================================================= */}
       <Dialog open={openModal} onOpenChange={setOpenModal}>
         <DialogContent showCloseButton={false} className="bg-[#FFFFFF] border border-[#E2D9CC] text-[#241C15] w-[95vw] sm:max-w-[560px] max-h-[92dvh] overflow-y-auto p-0 rounded-3xl shadow-2xl z-50">
@@ -1421,10 +1421,10 @@ export function CatalogoClient({
                 </div>
                 <div>
                   <DialogTitle className="text-base sm:text-lg font-black text-[#241C15]">
-                    {editingId ? (is3D ? 'Editar Modelo 3D' : 'Editar Juego de Mesa') : (is3D ? 'Registrar Nuevo Producto 3D' : 'Registrar Juego de Mesa')}
+                    {editingId ? 'Editar Juego de Mesa' : 'Registrar Juego de Mesa'}
                   </DialogTitle>
                   <DialogDescription className="text-xs text-[#75695D] mt-0.5">
-                    {is3D ? 'Define costos base, parámetros técnicos y precios escalonados' : 'Define costos de compra, precios de venta y detalles para la web'}
+                    Define costos de compra, precios de venta y detalles para la web
                   </DialogDescription>
                 </div>
               </div>
@@ -1444,12 +1444,12 @@ export function CatalogoClient({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold text-[#241C15] uppercase tracking-wider">
-                    {is3D ? 'Nombre del Modelo *' : 'Nombre del Juego *'}
+                    Nombre del Juego *
                   </Label>
                   <Input 
                     value={formData.nombreModelo}
                     onChange={(e) => setFormData(prev => ({ ...prev, nombreModelo: e.target.value }))}
-                    placeholder={is3D ? "Ej: Maceta Hexagonal XL" : "Ej: Catan, Fantasma Blitz..."}
+                    placeholder="Ej: Catan, Fantasma Blitz..."
                     required
                     autoFocus
                     className="bg-[#F8F6F2] border-[#E2D9CC] rounded-xl text-sm font-bold text-[#241C15] h-10"
@@ -1463,7 +1463,7 @@ export function CatalogoClient({
                   <Input 
                     value={formData.lineaCategoria}
                     onChange={(e) => setFormData(prev => ({ ...prev, lineaCategoria: e.target.value }))}
-                    placeholder={is3D ? "Ej: Macetas & Jardín" : "Ej: Juegos Familiares"}
+                    placeholder="Ej: Juegos Familiares, Estrategia..."
                     required
                     list="categorias-list"
                     className="bg-[#F8F6F2] border-[#E2D9CC] rounded-xl text-sm font-bold text-[#241C15] h-10"
@@ -1475,117 +1475,76 @@ export function CatalogoClient({
                   </datalist>
                 </div>
 
-                {/* BGG ID justo abajo del nombre (Modo Juegos de Mesa) */}
-                {!is3D && (
-                  <>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-xs font-bold text-[#241C15] uppercase tracking-wider flex items-center gap-1.5">
-                          <Dices className="h-3.5 w-3.5 text-indigo-600" />
-                          BGG ID (BoardGameGeek)
-                        </Label>
-                        <a
-                          href={formData.bggId ? `https://boardgamegeek.com/boardgame/${formData.bggId}` : (formData.nombreModelo ? `https://boardgamegeek.com/geeksearch.php?action=search&objecttype=boardgame&q=${encodeURIComponent(formData.nombreModelo)}` : 'https://boardgamegeek.com')}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[11px] text-indigo-600 hover:text-indigo-800 hover:underline font-bold flex items-center gap-1"
-                        >
-                          Buscar en BGG ↗
-                        </a>
-                      </div>
-                      <Input
-                        type="number"
-                        value={formData.bggId}
-                        onChange={(e) => setFormData(prev => ({ ...prev, bggId: e.target.value }))}
-                        placeholder="Ej: 83195"
-                        className="bg-[#F8F6F2] border-[#E2D9CC] rounded-xl text-sm font-mono font-bold text-[#241C15] h-10"
-                      />
-                      <p className="text-[10px] text-[#75695D]">
-                        Al guardar, la web mostrará el rating real de BGG automáticamente.
-                      </p>
-                    </div>
-
-                    <div className="flex items-center">
-                      <div className="w-full p-2.5 bg-[#FAF8F5] border border-[#E2D9CC] rounded-xl text-xs flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <span className="font-bold text-[#241C15] block truncate">
-                            {formData.bggId ? `ID Vinculado: #${formData.bggId}` : 'Vincular con BGG'}
-                          </span>
-                          <span className="text-[10px] text-[#75695D] block truncate">
-                            {formData.bggId ? 'Calificación sincronizada con BoardGameGeek' : 'Busca el juego en BGG y copia su ID numérico'}
-                          </span>
-                        </div>
-                        {formData.bggId && (
-                          <a
-                            href={`https://boardgamegeek.com/boardgame/${formData.bggId}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="shrink-0 px-2 py-1 bg-white border border-[#E2D9CC] rounded-lg text-[10px] font-bold text-indigo-600 hover:bg-indigo-50 flex items-center gap-1 shadow-2xs"
-                          >
-                            Ver en BGG <ExternalLink className="h-3 w-3" />
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Fila 2: Parámetros Técnicos (Gramos, Tiempo, Costo Base) */}
-              <div className="p-3.5 bg-[#FAF8F5] border border-[#E2D9CC] rounded-2xl space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#241C15] uppercase tracking-wider flex items-center gap-1.5">
-                    <Calculator className="h-3.5 w-3.5 text-[#A36F4C]" />
-                    {is3D ? 'Parámetros de Taller & Costo' : 'Costo de Compra'}
-                  </span>
-                  {is3D && (
-                    <span className="text-[10px] text-[#75695D]">
-                      Auto-cálculo de costo sugerido
-                    </span>
-                  )}
+                {/* BGG ID justo abajo del nombre */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold text-[#241C15] uppercase tracking-wider flex items-center gap-1.5">
+                      <Dices className="h-3.5 w-3.5 text-indigo-600" />
+                      BGG ID (BoardGameGeek)
+                    </Label>
+                    <a
+                      href={formData.bggId ? `https://boardgamegeek.com/boardgame/${formData.bggId}` : (formData.nombreModelo ? `https://boardgamegeek.com/geeksearch.php?action=search&objecttype=boardgame&q=${encodeURIComponent(formData.nombreModelo)}` : 'https://boardgamegeek.com')}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-indigo-600 hover:text-indigo-800 hover:underline font-bold flex items-center gap-1"
+                    >
+                      Buscar en BGG ↗
+                    </a>
+                  </div>
+                  <Input
+                    type="number"
+                    value={formData.bggId}
+                    onChange={(e) => setFormData(prev => ({ ...prev, bggId: e.target.value }))}
+                    placeholder="Ej: 83195"
+                    className="bg-[#F8F6F2] border-[#E2D9CC] rounded-xl text-sm font-mono font-bold text-[#241C15] h-10"
+                  />
+                  <p className="text-[10px] text-[#75695D]">
+                    Al guardar, la web mostrará el rating real de BGG automáticamente.
+                  </p>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2.5">
-                  {is3D && (
-                    <>
-                      <div className="space-y-1">
-                        <Label className="text-[11px] font-bold text-[#75695D]">Peso (g)</Label>
-                        <Input 
-                          type="number"
-                          step="1"
-                          value={formData.pesoGramos}
-                          onChange={(e) => handleGramosChange(e.target.value)}
-                          placeholder="150"
-                          className="bg-white border-[#E2D9CC] rounded-xl text-xs font-mono font-bold h-9"
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <Label className="text-[11px] font-bold text-[#75695D]">Tiempo (h)</Label>
-                        <Input 
-                          type="number"
-                          step="0.1"
-                          value={formData.tiempoHoras}
-                          onChange={(e) => setFormData(prev => ({ ...prev, tiempoHoras: e.target.value }))}
-                          placeholder="4.5"
-                          className="bg-white border-[#E2D9CC] rounded-xl text-xs font-mono font-bold h-9"
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  <div className={`space-y-1 ${!is3D ? 'col-span-3' : ''}`}>
-                    <Label className="text-[11px] font-bold text-[#1E5E3A]">Costo Base (S/)</Label>
-                    <Input 
-                      type="number"
-                      step="0.01"
-                      value={formData.costoBase}
-                      onChange={(e) => setFormData(prev => ({ ...prev, costoBase: e.target.value }))}
-                      placeholder={is3D ? "9.75" : "0.00"}
-                      required
-                      className="bg-white border-[#B4E3C0] text-[#1E5E3A] rounded-xl text-xs font-mono font-black h-9"
-                    />
+                <div className="flex items-center">
+                  <div className="w-full p-2.5 bg-[#FAF8F5] border border-[#E2D9CC] rounded-xl text-xs flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="font-bold text-[#241C15] block truncate">
+                        {formData.bggId ? `ID Vinculado: #${formData.bggId}` : 'Vincular con BGG'}
+                      </span>
+                      <span className="text-[10px] text-[#75695D] block truncate">
+                        {formData.bggId ? 'Calificación sincronizada con BoardGameGeek' : 'Busca el juego en BGG y copia su ID numérico'}
+                      </span>
+                    </div>
+                    {formData.bggId && (
+                      <a
+                        href={`https://boardgamegeek.com/boardgame/${formData.bggId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 px-2 py-1 bg-white border border-[#E2D9CC] rounded-lg text-[10px] font-bold text-indigo-600 hover:bg-indigo-50 flex items-center gap-1 shadow-2xs"
+                      >
+                        Ver en BGG <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
                   </div>
+                </div>
+              </div>
+
+              {/* Fila 2: Costo de Compra */}
+              <div className="p-3.5 bg-[#FAF8F5] border border-[#E2D9CC] rounded-2xl space-y-2">
+                <span className="text-xs font-bold text-[#241C15] uppercase tracking-wider flex items-center gap-1.5">
+                  <Calculator className="h-3.5 w-3.5 text-[#A36F4C]" />
+                  Costo de Compra
+                </span>
+
+                <div className="space-y-1">
+                  <Label className="text-[11px] font-bold text-[#1E5E3A]">Costo Base de Compra (S/)</Label>
+                  <Input 
+                    type="number"
+                    step="0.01"
+                    value={formData.costoBase}
+                    onChange={(e) => setFormData(prev => ({ ...prev, costoBase: e.target.value }))}
+                    placeholder="0.00"
+                    required
+                    className="bg-white border-[#B4E3C0] text-[#1E5E3A] rounded-xl text-xs font-mono font-black h-9"
+                  />
                 </div>
               </div>
 

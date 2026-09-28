@@ -14,13 +14,7 @@ function safeRevalidate() {
     revalidatePath('/finanzas')
     revalidatePath('/finanzas/flujo-caja')
     revalidatePath('/finanzas/cierres')
-    revalidatePath('/finanzas/caja-chica')
-    revalidatePath('/finanzas/proyecciones')
     revalidatePath('/finanzas/balance')
-    revalidatePath('/historico-mensual')
-    revalidatePath('/flujo-mensual')
-    revalidatePath('/inventario')
-    revalidatePath('/catalogo/inventario')
     revalidatePath('/')
   } catch (e) {
     // Ignore outside request store
@@ -245,8 +239,8 @@ export async function getPedidoById(id: string) {
   }
 }
 
-async function generateNextCodigoPedido(negocio: TipoNegocio = '3D'): Promise<string> {
-  const prefix = negocio === 'BG' ? 'BG' : 'PED'
+async function generateNextCodigoPedido(negocio: TipoNegocio = 'BG'): Promise<string> {
+  const prefix = 'BG'
   const count = await prisma.pedido.count({
     where: { negocio }
   })
@@ -305,7 +299,7 @@ export async function createPedido(data: CreatePedidoInput) {
 
       return {
         productoId: item.productoId,
-        nombreProductoSnapshot: prod?.nombreModelo || (targetNegocio === 'BG' ? 'Juego de Mesa' : 'Modelo 3D'),
+        nombreProductoSnapshot: prod?.nombreModelo || 'Juego de Mesa',
         costoBaseSnapshot: prod ? Number(prod.costoBase) : 0,
         colorFilamentoId: rawColores[0] || item.colorFilamentoId || null,
         coloresIds: rawColores,

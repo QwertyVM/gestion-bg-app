@@ -14,13 +14,7 @@ function safeRevalidate() {
     revalidatePath('/finanzas')
     revalidatePath('/finanzas/flujo-caja')
     revalidatePath('/finanzas/cierres')
-    revalidatePath('/finanzas/caja-chica')
-    revalidatePath('/finanzas/proyecciones')
     revalidatePath('/finanzas/balance')
-    revalidatePath('/historico-mensual')
-    revalidatePath('/flujo-mensual')
-    revalidatePath('/inventario')
-    revalidatePath('/catalogo/inventario')
     revalidatePath('/')
   } catch (e) {
     // Ignore outside request store
@@ -428,7 +422,7 @@ export async function createVenta(data: {
         items: {
           create: [{
             productoId: data.productoId,
-            nombreProductoSnapshot: producto?.nombreModelo || (targetNegocio === 'BG' ? 'Juego de Mesa' : 'Modelo 3D'),
+            nombreProductoSnapshot: producto?.nombreModelo || 'Juego de Mesa',
             costoBaseSnapshot: producto?.costoBase || 0,
             colorFilamentoId: rawColores[0] || data.colorFilamentoId,
             coloresIds: rawColores,

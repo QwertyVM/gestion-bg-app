@@ -12,7 +12,7 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname()
-  const { config, is3D } = useBusiness()
+  const { config } = useBusiness()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   // Auto-close mobile drawer on route change
@@ -23,20 +23,18 @@ export function AppShell({ children }: AppShellProps) {
   // Get current page name for mobile topbar
   const getPageTitle = () => {
     if (pathname === '/') return 'Dashboard General'
-    if (pathname.startsWith('/taller')) return 'Taller de Producción'
     if (pathname.startsWith('/pedidos')) return 'Gestión de Pedidos'
-    if (pathname.startsWith('/historico-mensual')) return 'Histórico Mensual'
     if (pathname.startsWith('/ventas')) return 'Ventas y Pedidos'
-    if (pathname === '/catalogo/inventario' || pathname.startsWith('/inventario')) return 'Inventario de Filamentos'
     if (pathname === '/finanzas/flujo-caja') return 'Flujo de Caja'
     if (pathname === '/finanzas/ingresos') return 'Ingresos'
     if (pathname === '/finanzas/egresos') return 'Registro de Egresos'
     if (pathname === '/finanzas/tags') return 'Tags & Categorías'
     if (pathname === '/catalogo/categorias') return 'Categorías'
-    if (pathname.startsWith('/catalogo')) return is3D ? 'Catálogo de Modelos' : 'Catálogo de Juegos'
-    if (pathname === '/finanzas/proyecciones') return 'Presupuesto & Proyecciones'
+    if (pathname.startsWith('/catalogo')) return 'Catálogo de Juegos'
+    if (pathname.startsWith('/tienda-web')) return 'Configuración de Tienda'
+    if (pathname.startsWith('/clientes')) return 'Clientes'
     if (pathname === '/finanzas/cierres') return 'Cierres de Mes'
-    return config.name
+    return 'NOVA Board Games'
   }
 
   return (
@@ -88,13 +86,9 @@ export function AppShell({ children }: AppShellProps) {
 
           <div className="flex items-center gap-2 shrink-0">
             <div
-              className={`h-8 px-2 rounded-xl flex items-center justify-center font-bold text-xs shadow-2xs ${
-                is3D
-                  ? 'bg-amber-600 text-white'
-                  : 'bg-indigo-600 text-white'
-              }`}
+              className="h-8 px-2 rounded-xl flex items-center justify-center font-bold text-xs shadow-2xs bg-indigo-600 text-white"
             >
-              {config.id}
+              BG
             </div>
           </div>
         </header>

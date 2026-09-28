@@ -231,7 +231,6 @@ export async function createCierreMes(data: {
     })
 
     revalidatePath('/finanzas/cierres')
-    revalidatePath('/finanzas/proyecciones')
     revalidatePath('/finanzas/flujo-caja')
     revalidatePath('/')
 
@@ -253,7 +252,6 @@ export async function deleteCierreMes(id: string) {
     })
 
     revalidatePath('/finanzas/cierres')
-    revalidatePath('/finanzas/proyecciones')
     revalidatePath('/')
 
     return { success: true, message: 'Registro de cierre eliminado exitosamente.' }

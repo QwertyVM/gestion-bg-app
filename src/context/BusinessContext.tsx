@@ -61,17 +61,17 @@ export function BusinessProvider({
     }
   }
 
-  const config = BUSINESSES[negocio] || BUSINESSES[DEFAULT_NEGOCIO]
+  const config = BUSINESSES['BG']
 
   return (
     <BusinessContext.Provider
       value={{
-        negocio,
+        negocio: 'BG',
         config,
-        is3D: negocio === '3D',
-        isBG: negocio === 'BG',
-        setNegocio,
-        isPending
+        is3D: false,
+        isBG: true,
+        setNegocio: () => {},
+        isPending: false
       }}
     >
       {children}

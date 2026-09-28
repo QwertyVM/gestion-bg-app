@@ -11,7 +11,6 @@ function safeRevalidate() {
     revalidatePath('/finanzas')
     revalidatePath('/finanzas/egresos')
     revalidatePath('/finanzas/flujo-caja')
-    revalidatePath('/finanzas/proyecciones')
     revalidatePath('/inversiones')
     revalidatePath('/')
   } catch (e) {
