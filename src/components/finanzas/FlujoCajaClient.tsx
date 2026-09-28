@@ -181,7 +181,7 @@ export function FlujoCajaClient({
   const { isBG } = useBusiness()
   const [search, setSearch] = useState('')
   const [tipoFilter, setTipoFilter] = useState<'TODOS' | 'INGRESOS' | 'EGRESOS'>('TODOS')
-  const [dateRange, setDateRange] = useState<DateRange>(getDefaultDateRange('ESTE_MES'))
+  const [dateRange, setDateRange] = useState<DateRange>(() => getDefaultDateRange('TODO'))
   const [currentPage, setCurrentPage] = useState(1)
 
   const formatCurrency = (val: number) => `S/ ${val.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`

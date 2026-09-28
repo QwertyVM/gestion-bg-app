@@ -24,7 +24,7 @@ const ITEMS_PER_PAGE = 5
 export function InversionesClient({ inversiones }: InversionesClientProps) {
   const [search, setSearch] = useState('')
   const [categoriaFilter, setCategoriaFilter] = useState<string>('TODOS')
-  const [dateRange, setDateRange] = useState<DateRange>(getDefaultDateRange('ESTE_MES'))
+  const [dateRange, setDateRange] = useState<DateRange>(() => getDefaultDateRange('TODO'))
   const [open, setOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)

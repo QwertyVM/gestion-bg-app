@@ -67,7 +67,7 @@ export function ClientesClient({ initialClientes }: ClientesClientProps) {
   const [search, setSearch] = useState('')
   const [filtroPago, setFiltroPago] = useState<FiltroPago>('TODOS')
   const [canalFilter, setCanalFilter] = useState<string>('TODOS')
-  const [dateRange, setDateRange] = useState<DateRange>(getDefaultDateRange('ESTE_MES'))
+  const [dateRange, setDateRange] = useState<DateRange>(() => getDefaultDateRange('TODO'))
 
   // Modales
   const [modalFormOpen, setModalFormOpen] = useState(false)

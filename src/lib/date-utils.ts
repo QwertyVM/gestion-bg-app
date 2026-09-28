@@ -109,9 +109,9 @@ export function getPresetDateRange(preset: DatePreset, referenceDate: Date = new
 }
 
 /**
- * Obtener el rango de fechas por defecto (por defecto: mes actual)
+ * Obtener el rango de fechas por defecto (por defecto: Histórico)
  */
-export function getDefaultDateRange(preset: DatePreset = 'ESTE_MES'): DateRange {
+export function getDefaultDateRange(preset: DatePreset = 'TODO'): DateRange {
   return getPresetDateRange(preset)
 }
 

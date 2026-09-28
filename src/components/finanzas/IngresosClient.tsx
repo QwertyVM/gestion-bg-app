@@ -57,7 +57,7 @@ export function IngresosClient({ ventas, pedidos, ingresosDirectos }: IngresosCl
 
   const [search, setSearch] = useState('')
   const [tipoFilter, setTipoFilter] = useState<'TODOS' | 'VENTAS' | 'DIRECTOS'>('TODOS')
-  const [dateRange, setDateRange] = useState<DateRange>(getDefaultDateRange('ESTE_MES'))
+  const [dateRange, setDateRange] = useState<DateRange>(() => getDefaultDateRange('TODO'))
   const [openModal, setOpenModal] = useState(false)
   const [openEditModal, setOpenEditModal] = useState(false)
   const [editingItem, setEditingItem] = useState<IngresoDirectoItem | null>(null)

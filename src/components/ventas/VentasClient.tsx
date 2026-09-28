@@ -167,7 +167,7 @@ export function VentasClient({
   const [search, setSearch] = useState('')
   const [estadoFilter, setEstadoFilter] = useState<string>('TODOS')
   const [pagoFilter, setPagoFilter] = useState<'TODOS' | 'PENDIENTES_PAGO' | 'PAGADOS'>('TODOS')
-  const [dateRange, setDateRange] = useState<DateRange>(getDefaultDateRange('ESTE_MES'))
+  const [dateRange, setDateRange] = useState<DateRange>(() => getDefaultDateRange('TODO'))
   const [currentPage, setCurrentPage] = useState(1)
 
   // Modals state

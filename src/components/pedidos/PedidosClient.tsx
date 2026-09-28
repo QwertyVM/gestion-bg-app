@@ -242,7 +242,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
-  const [dateRange, setDateRange] = useState<DateRange>(() => getPresetDateRange('ESTE_MES'))
+  const [dateRange, setDateRange] = useState<DateRange>(() => getPresetDateRange('TODO'))
 
   // =========================================================================
   // ESTADO DEL FORMULARIO MULTIPRODUCTO
