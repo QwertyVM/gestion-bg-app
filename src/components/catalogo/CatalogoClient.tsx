@@ -101,6 +101,7 @@ interface CatalogoClientProps {
 }
 
 type EstadoFilter = 'TODOS' | 'ACTIVOS' | 'DESCONTINUADOS'
+type StockFilter = 'TODOS' | 'EN_STOCK' | 'BAJO_STOCK' | 'AGOTADOS' | 'A_PEDIDO'
 
 export function CatalogoClient({ 
   productos: initialProductos, 
@@ -124,6 +125,7 @@ export function CatalogoClient({
   const [search, setSearch] = useState('')
   const [categoriaFilter, setCategoriaFilter] = useState<string>('TODAS')
   const [estadoFilter, setEstadoFilter] = useState<EstadoFilter>('TODOS')
+  const [stockFilter, setStockFilter] = useState<StockFilter>('TODOS')
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -424,6 +426,12 @@ export function CatalogoClient({
     return activeCats.size
   }, [productos])
 
+  // Stock KPIs
+  const totalUnidadesStock = useMemo(() => productos.reduce((acc, p) => acc + (p.stock || 0), 0), [productos])
+  const conStockCount = useMemo(() => productos.filter(p => p.activo && (p.stock || 0) > 0).length, [productos])
+  const bajoStockCount = useMemo(() => productos.filter(p => p.activo && p.controlarStock && (p.stock || 0) > 0 && (p.stock || 0) <= 2).length, [productos])
+  const agotadosCount = useMemo(() => productos.filter(p => p.activo && p.controlarStock && (p.stock || 0) <= 0).length, [productos])
+
   // Filtered Products List
   const filteredProductos = useMemo(() => {
     let list = productos
@@ -432,6 +440,16 @@ export function CatalogoClient({
       list = list.filter(p => p.activo)
     } else if (estadoFilter === 'DESCONTINUADOS') {
       list = list.filter(p => !p.activo)
+    }
+
+    if (stockFilter === 'EN_STOCK') {
+      list = list.filter(p => (p.stock || 0) > 0)
+    } else if (stockFilter === 'BAJO_STOCK') {
+      list = list.filter(p => p.controlarStock && (p.stock || 0) > 0 && (p.stock || 0) <= 2)
+    } else if (stockFilter === 'AGOTADOS') {
+      list = list.filter(p => p.controlarStock && (p.stock || 0) <= 0)
+    } else if (stockFilter === 'A_PEDIDO') {
+      list = list.filter(p => !p.controlarStock)
     }
 
     if (categoriaFilter !== 'TODAS') {
@@ -443,9 +461,9 @@ export function CatalogoClient({
       list = list.filter(p => {
         const nombre = (p.nombreModelo || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
         const cat = (p.lineaCategoria || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-        const gramos = (p.pesoGramos || '').toString()
+        const bgg = p.bggId ? p.bggId.toString() : ''
 
-        return nombre.includes(q) || cat.includes(q) || gramos.includes(q)
+        return nombre.includes(q) || cat.includes(q) || bgg.includes(q)
       })
     }
 
@@ -454,7 +472,7 @@ export function CatalogoClient({
       if (!a.activo && b.activo) return 1
       return a.nombreModelo.localeCompare(b.nombreModelo, 'es', { sensitivity: 'base' })
     })
-  }, [productos, estadoFilter, categoriaFilter, search])
+  }, [productos, estadoFilter, stockFilter, categoriaFilter, search])
 
   // Copy Quotation to Clipboard for WhatsApp: "[Nombre] - Precio: S/ [Mercado]"
   const handleCopiarCotizacion = (p: ProductoItem) => {
@@ -834,34 +852,40 @@ export function CatalogoClient({
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {/* KPI 1: Total Modelos */}
           <div 
-            onClick={() => setEstadoFilter('TODOS')}
+            onClick={() => {
+              setEstadoFilter('TODOS')
+              setStockFilter('TODOS')
+            }}
             className={`p-3.5 rounded-2xl border flex flex-col justify-between shadow-xs cursor-pointer transition-all ${
-              estadoFilter === 'TODOS'
+              estadoFilter === 'TODOS' && stockFilter === 'TODOS'
                 ? 'bg-white border-[#A36F4C] ring-1 ring-[#A36F4C]'
                 : 'bg-white border-[#E2D9CC] hover:bg-[#FAF8F5]'
             }`}
           >
             <div className="flex items-center justify-between text-[#6B7280]">
-              <span className="text-xs font-semibold">Total Modelos</span>
+              <span className="text-xs font-semibold">Total Catálogo</span>
               <div className="p-1 rounded-md bg-[#FAF7F4] text-[#A36F4C]">
                 <Boxes className="h-3.5 w-3.5" />
               </div>
             </div>
             <div className="mt-2">
               <div className="text-xl sm:text-2xl font-black text-[#241C15] font-mono tabular-nums">
-                {totalModelos} <span className="text-xs font-normal font-sans text-[#75695D]">diseños</span>
+                {totalModelos} <span className="text-xs font-normal font-sans text-[#75695D]">juegos</span>
               </div>
               <span className="text-xs text-[#75695D] mt-0.5 block truncate">
-                En catálogo general
+                {totalUnidadesStock} unidades en stock total
               </span>
             </div>
           </div>
 
           {/* KPI 2: Activos en Venta */}
           <div 
-            onClick={() => setEstadoFilter('ACTIVOS')}
+            onClick={() => {
+              setEstadoFilter('ACTIVOS')
+              setStockFilter('TODOS')
+            }}
             className={`p-3.5 rounded-2xl border flex flex-col justify-between shadow-xs cursor-pointer transition-all ${
-              estadoFilter === 'ACTIVOS'
+              estadoFilter === 'ACTIVOS' && stockFilter === 'TODOS'
                 ? 'bg-white border-[#1E5E3A] ring-1 ring-[#1E5E3A]'
                 : 'bg-white border-[#E2D9CC] hover:bg-[#FAF8F5]'
             }`}
@@ -877,32 +901,34 @@ export function CatalogoClient({
                 {activosCount} <span className="text-xs font-normal font-sans text-[#75695D]">modelos</span>
               </div>
               <span className="text-xs text-[#1E5E3A] font-medium mt-0.5 block truncate">
-                Disponibles para pedidos
+                {conStockCount} con stock disponible
               </span>
             </div>
           </div>
 
-          {/* KPI 3: Descontinuados */}
+          {/* KPI 3: Alertas de Stock */}
           <div 
-            onClick={() => setEstadoFilter('DESCONTINUADOS')}
+            onClick={() => {
+              setStockFilter(prev => prev === 'AGOTADOS' ? 'TODOS' : 'AGOTADOS')
+            }}
             className={`p-3.5 rounded-2xl border flex flex-col justify-between shadow-xs cursor-pointer transition-all ${
-              estadoFilter === 'DESCONTINUADOS'
-                ? 'bg-white border-[#75695D] ring-1 ring-[#75695D]'
+              stockFilter === 'AGOTADOS'
+                ? 'bg-white border-rose-500 ring-1 ring-rose-500'
                 : 'bg-white border-[#E2D9CC] hover:bg-[#FAF8F5]'
             }`}
           >
             <div className="flex items-center justify-between text-[#6B7280]">
-              <span className="text-xs font-semibold">Descontinuados</span>
-              <div className="p-1 rounded-md bg-[#FAF7F4] text-[#75695D]">
+              <span className="text-xs font-semibold">Alertas de Stock</span>
+              <div className={`p-1 rounded-md ${agotadosCount > 0 ? 'bg-rose-50 text-rose-600' : 'bg-[#FAF7F4] text-[#75695D]'}`}>
                 <Archive className="h-3.5 w-3.5" />
               </div>
             </div>
             <div className="mt-2">
-              <div className="text-xl sm:text-2xl font-black text-[#75695D] font-mono tabular-nums">
-                {descontinuadosCount} <span className="text-xs font-normal font-sans text-[#75695D]">archivados</span>
+              <div className="text-xl sm:text-2xl font-black text-[#241C15] font-mono tabular-nums">
+                {agotadosCount} <span className="text-xs font-normal font-sans text-rose-600">agotados</span>
               </div>
               <span className="text-xs text-[#75695D] mt-0.5 block truncate">
-                Fuera de venta
+                {bajoStockCount > 0 ? `${bajoStockCount} juegos con bajo stock (≤2)` : 'Sin quiebre de stock crítico'}
               </span>
             </div>
           </div>
@@ -936,13 +962,13 @@ export function CatalogoClient({
       <div className="bg-[#FFFFFF] border border-[#E2D9CC] rounded-3xl p-3 sm:p-4 shadow-xs space-y-3">
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
           
-          {/* Lado Izquierdo: Buscador + Dropdown Categorías */}
+          {/* Lado Izquierdo: Buscador + Dropdown Categorías + Dropdown Stock */}
           <div className="flex items-center gap-2.5 flex-1 min-w-0 flex-wrap sm:flex-nowrap">
             {/* Buscador */}
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#75695D]" />
               <Input 
-                placeholder="Buscar modelo, tag o gramaje..."
+                placeholder="Buscar juego, categoría o código BGG..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9 pr-8 bg-[#F8F6F2] border-[#E2D9CC] text-[#241C15] placeholder:text-[#75695D] text-xs sm:text-sm rounded-2xl h-10 focus:border-[#A36F4C] focus:bg-[#FFFFFF] transition-all"
@@ -961,7 +987,7 @@ export function CatalogoClient({
             <select
               value={categoriaFilter}
               onChange={(e) => setCategoriaFilter(e.target.value)}
-              className="h-10 px-3 bg-[#F8F6F2] border border-[#E2D9CC] text-xs font-bold text-[#241C15] rounded-2xl focus:border-[#A36F4C] focus:bg-white cursor-pointer min-w-[150px]"
+              className="h-10 px-3 bg-[#F8F6F2] border border-[#E2D9CC] text-xs font-bold text-[#241C15] rounded-2xl focus:border-[#A36F4C] focus:bg-white cursor-pointer min-w-[140px]"
             >
               <option value="TODAS">Todas las Categorías</option>
               {categoryNamesList.map(cat => (
@@ -969,6 +995,19 @@ export function CatalogoClient({
                   {cat} ({productos.filter(p => p.lineaCategoria.toLowerCase() === cat.toLowerCase()).length})
                 </option>
               ))}
+            </select>
+
+            {/* Dropdown de Stock */}
+            <select
+              value={stockFilter}
+              onChange={(e) => setStockFilter(e.target.value as StockFilter)}
+              className="h-10 px-3 bg-[#F8F6F2] border border-[#E2D9CC] text-xs font-bold text-[#241C15] rounded-2xl focus:border-[#A36F4C] focus:bg-white cursor-pointer min-w-[145px]"
+            >
+              <option value="TODOS">Todos los Stocks</option>
+              <option value="EN_STOCK">Con Stock ({conStockCount})</option>
+              <option value="BAJO_STOCK">Bajo Stock (≤2) ({bajoStockCount})</option>
+              <option value="AGOTADOS">Agotados (0) ({agotadosCount})</option>
+              <option value="A_PEDIDO">A Pedido / Sin Control</option>
             </select>
           </div>
 
@@ -1016,12 +1055,12 @@ export function CatalogoClient({
         </div>
 
         {/* Barra de Filtros Activos & Reset si hay búsqueda o filtros aplicados */}
-        {(search || estadoFilter !== 'TODOS' || categoriaFilter !== 'TODAS') && (
+        {(search || estadoFilter !== 'TODOS' || categoriaFilter !== 'TODAS' || stockFilter !== 'TODOS') && (
           <div className="flex items-center justify-between pt-2 border-t border-[#E2D9CC]/60 text-xs text-[#75695D]">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-medium">Mostrando:</span>
               <span className="font-bold text-[#241C15] bg-[#FAF8F5] px-2 py-0.5 rounded-lg border border-[#E2D9CC]">
-                {filteredProductos.length} {filteredProductos.length === 1 ? 'modelo' : 'modelos'}
+                {filteredProductos.length} {filteredProductos.length === 1 ? 'juego' : 'juegos'}
               </span>
               {search && (
                 <span className="text-[#75695D]">
@@ -1038,6 +1077,11 @@ export function CatalogoClient({
                   estado <strong>{estadoFilter}</strong>
                 </span>
               )}
+              {stockFilter !== 'TODOS' && (
+                <span className="text-[#75695D]">
+                  stock <strong>{stockFilter === 'EN_STOCK' ? 'Con Stock' : stockFilter === 'BAJO_STOCK' ? 'Bajo Stock' : stockFilter === 'AGOTADOS' ? 'Agotados' : 'A Pedido'}</strong>
+                </span>
+              )}
             </div>
             <button
               type="button"
@@ -1045,6 +1089,7 @@ export function CatalogoClient({
                 setSearch('')
                 setEstadoFilter('TODOS')
                 setCategoriaFilter('TODAS')
+                setStockFilter('TODOS')
               }}
               className="text-xs text-[#A36F4C] hover:text-[#8E5E3E] font-bold underline flex items-center gap-1 cursor-pointer"
             >
@@ -1063,16 +1108,18 @@ export function CatalogoClient({
       <div className="hidden lg:block w-full bg-[#FFFFFF] border border-[#E2D9CC] rounded-2xl shadow-xs overflow-hidden">
         <table className="w-full text-left border-collapse table-fixed text-xs">
           <colgroup>
-            <col className="w-[40%]" />
-            <col className="w-[12%]" />
-            <col className="w-[15%]" />
-            <col className="w-[18%]" />
-            <col className="w-[15%]" />
+            <col className="w-[32%]" />
+            <col className="w-[11%]" />
+            <col className="w-[14%]" />
+            <col className="w-[13%]" />
+            <col className="w-[16%]" />
+            <col className="w-[14%]" />
           </colgroup>
           <thead>
             <tr className="bg-[#FAF8F5] border-b border-[#E2D9CC] text-[#75695D] text-[11px] font-semibold">
               <th className="py-3.5 px-4 font-bold text-left">Modelo & Familia</th>
               <th className="py-3.5 px-4 font-bold text-left">Código BGG</th>
+              <th className="py-3.5 px-4 font-bold text-center">Stock</th>
               <th className="py-3.5 px-4 font-bold text-right">Costo Base</th>
               <th className="py-3.5 px-4 font-bold text-center">Precio de Venta (Mercado)</th>
               <th className="py-3.5 px-4 font-bold text-center">Estado</th>
@@ -1081,7 +1128,7 @@ export function CatalogoClient({
             <tbody className="divide-y divide-[#E2D9CC]">
               {filteredProductos.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-12 text-center text-[#75695D] italic bg-[#FFFFFF]">
+                  <td colSpan={6} className="py-12 text-center text-[#75695D] italic bg-[#FFFFFF]">
                     No se encontraron productos con ese criterio de búsqueda
                   </td>
                 </tr>
@@ -1135,12 +1182,44 @@ export function CatalogoClient({
                         )}
                       </td>
 
-                      {/* Columna 3: Costo Base */}
+                      {/* Columna 3: Stock */}
+                      <td className="py-3 px-3 text-center min-w-[100px]">
+                        {p.controlarStock ? (
+                          (p.stock ?? 0) <= 0 ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-[11px] font-bold">
+                              <span className="h-1.5 w-1.5 rounded-full bg-rose-600" />
+                              <span>Agotado (0)</span>
+                            </span>
+                          ) : (p.stock ?? 0) <= 2 ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-bold">
+                              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                              <span>{p.stock} un. (Bajo)</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold font-mono">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                              <span>{p.stock} un.</span>
+                            </span>
+                          )
+                        ) : (
+                          (p.stock ?? 0) > 0 ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FAF8F5] border border-[#E2D9CC] text-[#75695D] text-[11px] font-medium font-mono" title="Stock referencial (sin control estricto)">
+                              <span>{p.stock} un.</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-[#FAF8F5] border border-[#E2D9CC] text-[#A89F91] text-[10px] font-medium" title="Sin control estricto de existencias">
+                              A pedido
+                            </span>
+                          )
+                        )}
+                      </td>
+
+                      {/* Columna 4: Costo Base */}
                       <td className="py-3 px-4 text-right font-mono font-semibold text-[#241C15] text-xs min-w-[90px] tabular-nums">
                         {formatCurrency(costo)}
                       </td>
 
-                      {/* Columna 4: Niveles de Precios (1 Columna) */}
+                      {/* Columna 5: Niveles de Precios (1 Columna) */}
                       <td className="py-3 px-4 min-w-[120px]">
                         <div className="flex justify-center text-center font-mono text-xs tabular-nums">
                           {/* Mercado */}
@@ -1156,7 +1235,7 @@ export function CatalogoClient({
                         </div>
                       </td>
 
-                      {/* Columna 5: Estado */}
+                      {/* Columna 6: Estado */}
                       <td className="py-3 px-4 text-center min-w-[100px]">
                         {p.activo ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#ECFDF5] border border-[#B4E3C0] text-[#1E5E3A] text-[11px] font-bold">
@@ -1231,17 +1310,34 @@ export function CatalogoClient({
                   )}
                 </div>
 
-                {/* Fila 2: Especificaciones Técnicas y Costo Base */}
-                <div className="flex items-center justify-between text-xs font-mono bg-[#FAF8F5] p-2.5 rounded-2xl border border-[#E2D9CC]/70">
-                  <div className="flex items-center gap-3">
-                    <span className="text-[#75695D]">
-                      Peso: <strong className="text-[#241C15]">{gramos > 0 ? `${gramos}g` : '—'}</strong>
-                    </span>
-                    <span className="text-[#75695D]">
-                      Tiempo: <strong className="text-[#241C15]">{estimarTiempoImpresion(gramos)}</strong>
-                    </span>
+                {/* Fila 2: Stock y Costo Base */}
+                <div className="flex items-center justify-between text-xs bg-[#FAF8F5] p-2.5 rounded-2xl border border-[#E2D9CC]/70">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-[#75695D] font-medium">Stock:</span>
+                    {p.controlarStock ? (
+                      (p.stock ?? 0) <= 0 ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold">
+                          <span className="h-1.5 w-1.5 rounded-full bg-rose-600" />
+                          Agotado (0)
+                        </span>
+                      ) : (p.stock ?? 0) <= 2 ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-bold">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                          {p.stock} un. (Bajo)
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold font-mono">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                          {p.stock} un.
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-[10px] text-[#75695D] bg-[#FFFFFF] px-2 py-0.5 rounded-full border border-[#E2D9CC]">
+                        {(p.stock ?? 0) > 0 ? `${p.stock} un. (A pedido)` : 'A pedido'}
+                      </span>
+                    )}
                   </div>
-                  <span className="font-bold text-[#241C15]">
+                  <span className="font-bold font-mono text-[#241C15] text-xs">
                     Costo: {formatCurrency(costo)}
                   </span>
                 </div>
@@ -1561,11 +1657,14 @@ export function CatalogoClient({
                 </div>
 
                 {/* Stock y Oferta */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4">
                   {/* Bloque Stock */}
-                  <div className="space-y-2">
+                  <div className="p-3 bg-[#FAF8F5] border border-[#E2D9CC] rounded-2xl space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label className="text-[11px] font-bold text-[#75695D]">Stock Actual</Label>
+                      <Label className="text-xs font-bold text-[#241C15] flex items-center gap-1.5">
+                        <Boxes className="h-4 w-4 text-[#A36F4C]" />
+                        Inventario Físico & Control de Stock
+                      </Label>
                       <label className="flex items-center gap-1.5 cursor-pointer">
                         <input
                           type="checkbox"
@@ -1573,17 +1672,45 @@ export function CatalogoClient({
                           onChange={(e) => setFormData(prev => ({ ...prev, controlarStock: e.target.checked }))}
                           className="rounded border-[#E2D9CC] text-[#A36F4C] focus:ring-[#A36F4C]"
                         />
-                        <span className="text-[10px] text-[#75695D]">Controlar</span>
+                        <span className="text-[11px] font-bold text-[#A36F4C]">Controlar Stock</span>
                       </label>
                     </div>
-                    <Input
-                      type="number"
-                      value={formData.stock}
-                      onChange={(e) => setFormData(prev => ({ ...prev, stock: e.target.value }))}
-                      placeholder="0"
-                      disabled={!formData.controlarStock}
-                      className="bg-[#F8F6F2] border-[#E2D9CC] rounded-xl text-xs h-9 disabled:opacity-50"
-                    />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                      <div className="space-y-1">
+                        <Label className="text-[10px] font-bold text-[#75695D] uppercase tracking-wider">Unidades Disponibles</Label>
+                        <div className="relative">
+                          <Input
+                            type="number"
+                            min="0"
+                            value={formData.stock}
+                            onChange={(e) => {
+                              const val = e.target.value
+                              setFormData(prev => ({ 
+                                ...prev, 
+                                stock: val,
+                                controlarStock: prev.controlarStock || (parseInt(val) > 0)
+                              }))
+                            }}
+                            placeholder="0"
+                            className="bg-white border-[#E2D9CC] rounded-xl text-xs h-9 pr-14 font-mono font-bold"
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-[#75695D] font-bold pointer-events-none">
+                            unid.
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-[11px] text-[#75695D] bg-white p-2.5 rounded-xl border border-[#E2D9CC]">
+                        {formData.controlarStock ? (
+                          <span className="text-[#1E5E3A] font-semibold flex items-center gap-1">
+                            ✓ Se descontará del stock con cada venta o pedido registrado.
+                          </span>
+                        ) : (
+                          <span>
+                            Sin control estricto: el juego se ofrece como disponible a pedido.
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Bloque Oferta */}

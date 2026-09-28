@@ -39,6 +39,8 @@ export async function getProductos(negocio?: TipoNegocio) {
     precioComunidad: Number(p.precioComunidad),
     pesoGramos: p.pesoGramos != null ? Number(p.pesoGramos) : 0,
     precioOferta: p.precioOferta != null ? Number(p.precioOferta) : null,
+    stock: p.stock != null ? Number(p.stock) : 0,
+    controlarStock: Boolean(p.controlarStock),
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
   }))
