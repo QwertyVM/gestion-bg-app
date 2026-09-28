@@ -150,10 +150,16 @@ function FlujoCajaTooltip({ active, payload, label }: any) {
           <div className="flex justify-between items-center">
             <span className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-[#059669]" />
-              Cobranzas (Entradas):
+              Entradas (Cobros & Inyecciones):
             </span>
             <span className="font-mono font-bold text-[#059669]">S/ {entradas.toFixed(2)}</span>
           </div>
+          {Number(data.inyeccionesTotal || 0) > 0 && (
+            <div className="flex justify-between items-center pl-3.5 text-[11px] text-[#059669]">
+              <span>↳ De inyecciones:</span>
+              <span className="font-mono font-medium">S/ {Number(data.inyeccionesTotal).toFixed(2)}</span>
+            </div>
+          )}
           <div className="flex justify-between items-center">
             <span className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-[#DC2626]" />
@@ -372,25 +378,21 @@ export function DashboardClient({
     }
   }, [filteredVentas, filteredInversiones, filteredIngresosDirectos, dateRange, rawVentas, rawInversiones, initialKpis])
 
-  // 5. Capacidad de gasto calculada para el período
+  // 5. Saldo y liquidez en caja calculada para el período
   const gasto = useMemo(() => {
     const saldoActualCaja = Math.max(0, (dynamicKpis.totalCobradoVentas + dynamicKpis.totalIngresosDirectos) - dynamicKpis.egresosTotales)
-    const cuotaPrestamoMensual = 368.88
-    const reservaCapexMensual = 878.00
-    const gastosFijosTaller = 111.00
-    const totalBlindadoMes = cuotaPrestamoMensual + reservaCapexMensual + gastosFijosTaller
-    const gastoDisponibleHoy = Math.max(0, saldoActualCaja - totalBlindadoMes)
-    const margenUnitarioPromedio = dynamicKpis.ticketPromedio > 0 ? (dynamicKpis.gananciaNeta / Math.max(1, filteredVentas.length)) : 97.00
-    const pedidosProyectadosMes = Math.max(8, Math.min(30, Math.round(filteredVentas.length / Math.max(1, 1)) || 18))
-    const gananciaProyectadaMes = pedidosProyectadosMes * margenUnitarioPromedio
-    const gastoDisponibleProyectado = Math.max(0, (saldoActualCaja + gananciaProyectadaMes) - totalBlindadoMes)
+    const gastoDisponibleHoy = saldoActualCaja
+    const margenUnitarioPromedio = dynamicKpis.ticketPromedio > 0 ? (dynamicKpis.gananciaNeta / Math.max(1, filteredVentas.length)) : 0
+    const pedidosProyectadosMes = filteredVentas.length
+    const gananciaProyectadaMes = dynamicKpis.gananciaNeta
+    const gastoDisponibleProyectado = saldoActualCaja
 
     return {
       saldoActualCaja,
-      totalBlindadoMes,
-      cuotaPrestamoMensual,
-      reservaCapexMensual,
-      gastosFijosTaller,
+      totalBlindadoMes: 0,
+      cuotaPrestamoMensual: 0,
+      reservaCapexMensual: 0,
+      gastosFijosTaller: 0,
       gastoDisponibleHoy,
       gastoDisponibleProyectado,
       pedidosProyectadosMes,
@@ -408,6 +410,7 @@ export function DashboardClient({
       salidas: number
       pedidosCount: number
       pedidosDetalle?: { cliente: string; producto: string; total: number }[]
+      inyeccionesTotal?: number
     }> = {}
 
     // A. Inicializar todos los días del período para rangos continuos (ej. semana o mes de hasta 60 días)
@@ -523,7 +526,30 @@ export function DashboardClient({
       timelineMap[invDate].salidas += Number(inv.costoTotal || 0)
     })
 
-    // E. Convertir a array ordenado y calcular acumulados
+    // E. Procesar ingresos directos / inyecciones de dinero (entradas) según su fecha
+    filteredIngresosDirectos.forEach((ing: any) => {
+      const ingDate = ing.fecha ? String(ing.fecha).split('T')[0] : ''
+      if (!ingDate) return
+      if (!isDateInRange(ingDate, dateRange.from, dateRange.to)) return
+
+      if (!timelineMap[ingDate]) {
+        timelineMap[ingDate] = {
+          ventaTotal: 0,
+          costoProduccion: 0,
+          utilidad: 0,
+          entradas: 0,
+          salidas: 0,
+          pedidosCount: 0,
+          pedidosDetalle: [],
+          inyeccionesTotal: 0
+        }
+      }
+      const montoIng = Number(ing.monto || 0)
+      timelineMap[ingDate].entradas += montoIng
+      timelineMap[ingDate].inyeccionesTotal = (timelineMap[ingDate].inyeccionesTotal || 0) + montoIng
+    })
+
+    // F. Convertir a array ordenado y calcular acumulados
     const sortedDates = Object.keys(timelineMap).sort()
     let acumCobranzas = 0
     let acumGastos = 0
@@ -545,6 +571,7 @@ export function DashboardClient({
         margenPct,
         entradas: Number(d.entradas.toFixed(2)),
         salidas: Number(d.salidas.toFixed(2)),
+        inyeccionesTotal: Number((d.inyeccionesTotal || 0).toFixed(2)),
         balanceNeto: Number((d.entradas - d.salidas).toFixed(2)),
         ingresosAcum: Number(acumCobranzas.toFixed(2)),
         egresosAcum: Number(acumGastos.toFixed(2)),
@@ -553,7 +580,7 @@ export function DashboardClient({
         pedidosDetalle: d.pedidosDetalle || []
       }
     })
-  }, [filteredVentas, filteredInversiones, rawVentas, dateRange])
+  }, [filteredVentas, filteredInversiones, filteredIngresosDirectos, rawVentas, dateRange])
 
   // 7. Datos de Distribución de Egresos vs Ingresos (Donut Chart)
   const comparativaIngresosGastos = useMemo(() => {
@@ -870,7 +897,7 @@ export function DashboardClient({
               <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] pb-2 text-[#6B7280]">
                 <div className="flex items-center gap-1.5 font-medium">
                   <span className="w-2.5 h-2.5 bg-[#059669] rounded-xs inline-block" />
-                  <span>Cobranzas (Entradas)</span>
+                  <span>Entradas (Cobros & Inyecciones)</span>
                 </div>
                 <div className="flex items-center gap-1.5 font-medium">
                   <span className="w-2.5 h-2.5 bg-[#DC2626] rounded-xs inline-block" />
@@ -1064,22 +1091,28 @@ export function DashboardClient({
           </div>
         </div>
 
-        {/* KPI 2: Capacidad de Gasto Libre */}
+        {/* KPI 2: Saldo Disponible en Caja */}
         <div className="bg-white border border-[#E5DCD3] rounded-2xl p-4 shadow-xs flex flex-col justify-between space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#6B7280]">Gasto Disponible Libre</span>
-            <div className={`p-1.5 rounded-lg ${gasto.gastoDisponibleHoy > 0 ? 'bg-[#ECFDF5] text-[#059669]' : 'bg-[#FEF3C7] text-[#92400E]'}`}>
+            <span className="text-xs font-semibold text-[#6B7280]">Saldo Disponible en Caja</span>
+            <div className={`p-1.5 rounded-lg ${gasto.saldoActualCaja > 0 ? 'bg-[#ECFDF5] text-[#059669]' : 'bg-[#FEF3C7] text-[#92400E]'}`}>
               <ShieldCheck className="h-4 w-4" />
             </div>
           </div>
           <div>
-            <div className={`text-2xl font-black font-mono tracking-tight tabular-nums ${gasto.gastoDisponibleHoy > 0 ? 'text-[#059669]' : 'text-[#92400E]'}`}>
-              {formatCurrency(gasto.gastoDisponibleHoy)}
+            <div className={`text-2xl font-black font-mono tracking-tight tabular-nums ${gasto.saldoActualCaja > 0 ? 'text-[#059669]' : 'text-[#92400E]'}`}>
+              {formatCurrency(gasto.saldoActualCaja)}
             </div>
             <div className="flex items-center gap-1.5 mt-1 text-xs text-[#6B7280] truncate">
-              <span>Caja: {formatCurrency(gasto.saldoActualCaja)}</span>
+              <span>Cobrado: {formatCurrency(dynamicKpis.totalCobradoVentas)}</span>
+              {dynamicKpis.totalIngresosDirectos > 0 && (
+                <>
+                  <span>•</span>
+                  <span>Inyecciones: {formatCurrency(dynamicKpis.totalIngresosDirectos)}</span>
+                </>
+              )}
               <span>•</span>
-              <span title={`Blindado: ${formatCurrency(gasto.totalBlindadoMes)}`}>Blindado: {formatCurrency(gasto.totalBlindadoMes)}</span>
+              <span>Egresos: {formatCurrency(dynamicKpis.egresosTotales)}</span>
             </div>
           </div>
         </div>

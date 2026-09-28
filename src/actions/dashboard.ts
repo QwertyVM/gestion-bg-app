@@ -99,7 +99,17 @@ export async function getDashboardData(negocio?: TipoNegocio) {
     }
   })
 
-  // C. Generar array ordenado cronológicamente con todo el historial
+  // C. Procesar ingresos directos / inyecciones de dinero en sus fechas de cobro
+  ingresosDirectos.forEach((ing: any) => {
+    const rawIngFecha = ing.fecha instanceof Date ? ing.fecha.toISOString() : String(ing.fecha)
+    const iDate = rawIngFecha.split('T')[0]
+    if (!timelineMap[iDate]) {
+      timelineMap[iDate] = { ingresos: 0, costo: 0, ganancia: 0 }
+    }
+    timelineMap[iDate].ingresos += Number(ing.monto)
+  })
+
+  // D. Generar array ordenado cronológicamente con todo el historial
   const graficoEvolucion = Object.entries(timelineMap)
     .map(([fecha, vals]) => ({ 
       fecha, 
@@ -393,17 +403,17 @@ export async function getDashboardData(negocio?: TipoNegocio) {
       porcentajeFacturacion: ingresosVentas > 0 ? Number(((art.totalFacturado / ingresosVentas) * 100).toFixed(1)) : 0
     }))
 
-  // 14. Indicador de Capacidad de Gasto del Mes Actual (Lo que tengo vs Lo Blindado vs Lo Proyectado)
+  // 14. Indicador de Saldo y Capacidad de Gasto en Caja
   const saldoActualCaja = Math.max(0, (totalCobradoVentas + totalIngresosDirectos) - egresosTotales)
-  const cuotaPrestamoMensual = 368.88
-  const reservaCapexMensual = 878.00
-  const gastosFijosTaller = 111.00
-  const totalBlindadoMes = cuotaPrestamoMensual + reservaCapexMensual + gastosFijosTaller
-  const gastoDisponibleHoy = Math.max(0, saldoActualCaja - totalBlindadoMes)
-  const margenUnitarioPromedio = ticketPromedio > 0 ? (gananciaNeta / Math.max(1, ventas.length)) : 97.00
-  const pedidosProyectadosMes = Math.max(8, Math.min(30, Math.round(ventas.length / Math.max(1, 2)) || 18))
-  const gananciaProyectadaMes = pedidosProyectadosMes * margenUnitarioPromedio
-  const gastoDisponibleProyectado = Math.max(0, (saldoActualCaja + gananciaProyectadaMes) - totalBlindadoMes)
+  const totalBlindadoMes = 0
+  const cuotaPrestamoMensual = 0
+  const reservaCapexMensual = 0
+  const gastosFijosTaller = 0
+  const gastoDisponibleHoy = saldoActualCaja
+  const margenUnitarioPromedio = ticketPromedio > 0 ? (gananciaNeta / Math.max(1, ventas.length)) : 0
+  const pedidosProyectadosMes = ventas.length
+  const gananciaProyectadaMes = gananciaNeta
+  const gastoDisponibleProyectado = saldoActualCaja
 
   const serializedInversiones = inversiones.map((inv: any) => ({
     id: inv.id,
