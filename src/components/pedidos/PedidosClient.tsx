@@ -249,6 +249,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
   // =========================================================================
   const [formFecha, setFormFecha] = useState(() => new Date().toISOString().split('T')[0])
   const [formCliente, setFormCliente] = useState('')
+  const [formDni, setFormDni] = useState('')
   const [formTelefono, setFormTelefono] = useState('')
   const [formCanal, setFormCanal] = useState('WhatsApp')
   const [formDestino, setFormDestino] = useState('')
@@ -362,6 +363,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
     const defaultProd = productos[0]
     setFormFecha(new Date().toISOString().split('T')[0])
     setFormCliente('')
+    setFormDni('')
     setFormTelefono('')
     setFormCanal('WhatsApp')
     setFormDestino('')
@@ -407,6 +409,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
       const res = await createPedido({
         fecha: formFecha,
         cliente: formCliente.trim(),
+        dni: formDni.trim() || undefined,
         telefono: formTelefono.trim() || undefined,
         canalVenta: formCanal,
         destinoEnvio: formDestino.trim() || undefined,
@@ -452,6 +455,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
     setEditingPedido(p)
     setFormFecha(p.fecha ? p.fecha.split('T')[0] : new Date().toISOString().split('T')[0])
     setFormCliente(p.cliente)
+    setFormDni(p.dni || '')
     setFormTelefono(p.telefono || '')
     setFormCanal(p.canalVenta || 'WhatsApp')
     setFormDestino(p.destinoEnvio || '')
@@ -497,6 +501,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
       const res = await updatePedido(editingPedido.id, {
         fecha: formFecha,
         cliente: formCliente.trim(),
+        dni: formDni.trim() || undefined,
         telefono: formTelefono.trim() || undefined,
         canalVenta: formCanal,
         destinoEnvio: formDestino.trim() || undefined,
@@ -629,7 +634,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
     const saldoText = p.saldoPendiente > 0 ? `\n⏳ *Saldo Pendiente:* S/ ${p.saldoPendiente.toFixed(2)}` : '\n✅ *Estado Pago:* 100% Cancelado'
 
     const ticketMsg = `*RESUMEN DE PEDIDO — ${p.codigo}*\n` +
-      `👤 *Cliente:* ${p.cliente}\n` +
+      `👤 *Cliente:* ${p.cliente}${p.dni ? ` (DNI: ${p.dni})` : ''}\n` +
       `📅 *Fecha:* ${formatDate(p.fecha)}\n` +
       (p.diaEntregaPrometida ? `📦 *Entrega Pactada:* ${p.diaEntregaPrometida}\n` : '') +
       `\n*PRODUCTOS:* \n${itemsText}${envioText}\n\n` +
@@ -652,6 +657,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
 
       const matchSearch = p.cliente.toLowerCase().includes(search.toLowerCase()) ||
         p.codigo.toLowerCase().includes(search.toLowerCase()) ||
+        (p.dni && p.dni.includes(search)) ||
         (p.telefono && p.telefono.includes(search)) ||
         (p.destinoEnvio && p.destinoEnvio.toLowerCase().includes(search.toLowerCase())) ||
         p.items.some(i => i.nombreProductoSnapshot.toLowerCase().includes(search.toLowerCase()))
@@ -1042,6 +1048,12 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
                             </div>
                             <div className="flex items-center gap-1.5 text-xs text-[#75695D]">
                               <span>{formatDate(p.fecha)}</span>
+                              {p.dni && (
+                                <>
+                                  <span className="text-[#D4BEA7]">•</span>
+                                  <span className="font-mono text-[11px] font-semibold text-[#A36F4C]">DNI: {p.dni}</span>
+                                </>
+                              )}
                               {p.canalVenta && (
                                 <>
                                   <span className="text-[#D4BEA7]">•</span>
@@ -1244,7 +1256,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
                   1. Datos del Cliente y Despacho
                 </span>
 
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs text-[#241C15] font-bold flex items-center gap-1">
                       <Calendar className="h-3 w-3 text-[#A36F4C]" />
@@ -1267,6 +1279,17 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
                       value={formCliente}
                       onChange={(e) => setFormCliente(e.target.value)}
                       className="bg-[#FAF8F5] border-[#E2D9CC] text-sm rounded-xl"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs text-[#241C15] font-bold">DNI / RUC</Label>
+                    <Input
+                      placeholder="Ej: 71234567"
+                      value={formDni}
+                      onChange={(e) => setFormDni(e.target.value)}
+                      maxLength={11}
+                      className="bg-[#FAF8F5] border-[#E2D9CC] text-sm rounded-xl font-mono"
                     />
                   </div>
 
@@ -1654,6 +1677,11 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
                 <div>
                   <span className="text-[10px] text-[#75695D] block">Cliente:</span>
                   <strong className="text-[#241C15] font-extrabold">{selectedPedidoDetail.cliente}</strong>
+                  {selectedPedidoDetail.dni && (
+                    <span className="text-[10px] text-[#A36F4C] font-mono font-bold block">
+                      DNI: {selectedPedidoDetail.dni}
+                    </span>
+                  )}
                 </div>
                 <div>
                   <span className="text-[10px] text-[#75695D] block">Fecha Pedido:</span>
@@ -1937,7 +1965,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs text-[#241C15] font-bold flex items-center gap-1">
                       <Calendar className="h-3 w-3 text-[#A36F4C]" />
@@ -1960,6 +1988,17 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
                       value={formCliente}
                       onChange={(e) => setFormCliente(e.target.value)}
                       className="bg-[#FAF8F5] border-[#E2D9CC] text-sm rounded-xl"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs text-[#241C15] font-bold">DNI / RUC</Label>
+                    <Input
+                      placeholder="Ej: 71234567"
+                      value={formDni}
+                      onChange={(e) => setFormDni(e.target.value)}
+                      maxLength={11}
+                      className="bg-[#FAF8F5] border-[#E2D9CC] text-sm rounded-xl font-mono"
                     />
                   </div>
 
