@@ -311,3 +311,56 @@ export async function deleteProducto(id: string) {
   safeRevalidate()
   return { deleted: true, message: 'Producto eliminado correctamente.' }
 }
+
+export async function deleteModeloConVariantes(variantIds: string[]) {
+  if (!variantIds || variantIds.length === 0) {
+    throw new Error('No se especificaron productos para eliminar')
+  }
+
+  const deletedIds: string[] = []
+  const discontinuedIds: string[] = []
+
+  await prisma.$transaction(async (tx) => {
+    for (const id of variantIds) {
+      const ventasCount = await tx.venta.count({ where: { productoId: id } })
+      if (ventasCount > 0) {
+        await tx.producto.update({
+          where: { id },
+          data: { activo: false }
+        })
+        discontinuedIds.push(id)
+      } else {
+        await tx.producto.delete({ where: { id } })
+        deletedIds.push(id)
+      }
+    }
+  })
+
+  safeRevalidate()
+
+  let message = ''
+  if (deletedIds.length > 0 && discontinuedIds.length > 0) {
+    message = `Se eliminaron ${deletedIds.length} versión(es) y se marcaron ${discontinuedIds.length} como descontinuadas por tener ventas históricas.`
+  } else if (discontinuedIds.length > 0) {
+    message = `Las versiones tienen ventas históricas asociadas, por lo que fueron marcadas como Descontinuadas.`
+  } else {
+    message = `El modelo y sus versiones fueron eliminados correctamente.`
+  }
+
+  return { deletedIds, discontinuedIds, message }
+}
+
+export async function duplicarModeloConVariantes(variantIds: string[]) {
+  if (!variantIds || variantIds.length === 0) {
+    throw new Error('No se especificaron productos para duplicar')
+  }
+
+  const duplicados = []
+  for (const id of variantIds) {
+    const dup = await duplicarProducto(id)
+    duplicados.push(dup)
+  }
+
+  return duplicados
+}
+

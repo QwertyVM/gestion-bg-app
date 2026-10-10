@@ -16,36 +16,50 @@ import {
   Share2, 
   Check, 
   Layers, 
-  Palette, 
   Clock, 
-  Weight, 
-  DollarSign, 
   Boxes, 
   Calculator, 
-  MoreHorizontal,
-  Trash2,
-  ExternalLink,
-  ChevronDown,
-  Globe,
-  Dices,
-  FileDown
+  Trash2, 
+  ExternalLink, 
+  ChevronDown, 
+  LayoutGrid, 
+  Table2, 
+  Sparkles, 
+  FileDown, 
+  Dices, 
+  Star,
+  RefreshCw
 } from 'lucide-react'
-import { useBusiness } from '@/context/BusinessContext'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator
+} from '@/components/ui/dropdown-menu'
 import { toast } from 'sonner'
 import { 
-  createProducto, 
-  updateProducto, 
   toggleEstadoProducto, 
   duplicarProducto, 
-  deleteProducto 
+  deleteProducto,
+  deleteModeloConVariantes,
+  duplicarModeloConVariantes
 } from '@/actions/productos'
-import { updateBggStats, bulkUpdateBggStats, BggStatUpdateItem } from '@/actions/bgg'
+import { bulkUpdateBggStats, BggStatUpdateItem } from '@/actions/bgg'
 import { XMLParser } from 'fast-xml-parser'
+
+import { 
+  ProductsTableView, 
+  groupProducts, 
+  ProductGroupRow, 
+  OrdenCatalogType 
+} from './ProductsTableView'
+import { ProductCardGrid } from './ProductCardGrid'
+import { ProductFormModal } from './ProductFormModal'
+import { ProductDetailsModal } from './ProductDetailsModal'
 
 export interface ProductoItem {
   id: string
@@ -102,17 +116,16 @@ interface CatalogoClientProps {
 
 type EstadoFilter = 'TODOS' | 'ACTIVOS' | 'DESCONTINUADOS'
 type StockFilter = 'TODOS' | 'EN_STOCK' | 'BAJO_STOCK' | 'AGOTADOS' | 'A_PEDIDO'
+type ViewMode = 'cards' | 'table'
 
 export function CatalogoClient({ 
   productos: initialProductos, 
   categoriasIniciales = [] 
 }: CatalogoClientProps) {
   const router = useRouter()
-  const { isBG } = useBusiness()
   const [productos, setProductos] = useState<ProductoItem[]>(initialProductos)
   const [categorias, setCategorias] = useState<CategoriaItem[]>(categoriasIniciales)
 
-  // Sync state with props when business context changes and server refetches
   useEffect(() => {
     setProductos(initialProductos)
   }, [initialProductos])
@@ -120,110 +133,283 @@ export function CatalogoClient({
   useEffect(() => {
     setCategorias(categoriasIniciales)
   }, [categoriasIniciales])
-  
-  // Toolbar and Filters
+
+  // Preferencia de vista (Tarjetas vs Tabla) persistida en localStorage
+  const [viewMode, setViewMode] = useState<ViewMode>('cards')
+  useEffect(() => {
+    const saved = localStorage.getItem('bg_catalogo_view_mode') as ViewMode | null
+    if (saved === 'cards' || saved === 'table') {
+      setViewMode(saved)
+    }
+  }, [])
+
+  const handleToggleViewMode = (mode: ViewMode) => {
+    setViewMode(mode)
+    localStorage.setItem('bg_catalogo_view_mode', mode)
+  }
+
+  // Filtros de barra de herramientas
   const [search, setSearch] = useState('')
   const [categoriaFilter, setCategoriaFilter] = useState<string>('TODAS')
   const [estadoFilter, setEstadoFilter] = useState<EstadoFilter>('TODOS')
   const [stockFilter, setStockFilter] = useState<StockFilter>('TODOS')
+  const [ordenFilter, setOrdenFilter] = useState<OrdenCatalogType>('RECIENTES')
   const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
-  const [isPending, startTransition] = useTransition()
-
-  // Modal State
-  const [openModal, setOpenModal] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [formData, setFormData] = useState({
-    nombreModelo: '',
-    lineaCategoria: '',
-    pesoGramos: '',
-    tiempoHoras: '',
-    costoBase: '',
-    precioAmigos: '',
-    precioMercado: '',
-    activo: true,
-    stock: '0',
-    controlarStock: false,
-    enOferta: false,
-    precioOferta: '',
-    porcentajeDescuento: '',
-    imagenUrl: '',
-    descripcionWeb: '',
-    destacadoWeb: false,
-    bulletPoint1: '',
-    bulletPoint2: '',
-    bulletPoint3: '',
-    bulletPoint4: '',
-    numJugadores: '',
-    edadMinima: '',
-    duracionMinutos: '',
-    idioma: '',
-    editorialMarca: '',
-    mecanicas: '',
-    bggId: ''
-  })
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
   const [isSyncingBgg, setIsSyncingBgg] = useState(false)
-  const [isExportOpen, setIsExportOpen] = useState(false)
-  const exportMenuRef = useRef<HTMLDivElement>(null)
 
-  const bggCount = useMemo(() => {
-    return productos.filter(p => p.bggId != null && Number(p.bggId) > 0).length
-  }, [productos])
+  // Modales
+  const [isFormOpen, setIsFormOpen] = useState(false)
+  const [editingProduct, setEditingProduct] = useState<ProductoItem | null>(null)
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false)
+  const [selectedGroup, setSelectedGroup] = useState<ProductGroupRow | null>(null)
+  const [selectedSingleProduct, setSelectedSingleProduct] = useState<ProductoItem | null>(null)
 
-  const handleExportBggCsv = (onlyWithBgg: boolean = true) => {
-    const targetProducts = onlyWithBgg 
-      ? productos.filter(p => p.bggId != null && Number(p.bggId) > 0)
-      : productos
-
-    if (targetProducts.length === 0) {
-      toast.info('No hay productos con código BGG registrado para exportar')
-      return
-    }
-
-    const headers = ['id', 'bggId', 'nombreModelo', 'negocio']
-    const rows = targetProducts.map(p => [
-      p.id,
-      p.bggId ?? '',
-      p.nombreModelo,
-      p.negocio || 'BG'
-    ])
-
-    const escapeCsv = (val: string | number | null | undefined) => {
-      if (val === null || val === undefined) return ''
-      const str = String(val)
-      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
-        return `"${str.replace(/"/g, '""')}"`
-      }
-      return str
-    }
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(r => r.map(escapeCsv).join(','))
-    ].join('\r\n')
-
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    const dateStr = new Date().toISOString().split('T')[0]
-    const fileSuffix = onlyWithBgg ? 'bgg' : 'catalogo'
-    link.href = url
-    link.download = `productos_${fileSuffix}_bg_${dateStr}.csv`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-
-    toast.success(`Exportados ${targetProducts.length} productos (.csv)`)
+  // Handlers para abrir modales
+  const handleOpenCreate = () => {
+    setEditingProduct(null)
+    setIsFormOpen(true)
   }
 
+  const handleOpenEdit = (p: ProductoItem) => {
+    setEditingProduct(p)
+    setIsFormOpen(true)
+  }
+
+  const handleOpenEditGroup = (group: ProductGroupRow) => {
+    if (group.variants.length > 0) {
+      setEditingProduct(group.variants[0].producto)
+      setIsFormOpen(true)
+    }
+  }
+
+  const handleOpenDetail = (group?: ProductGroupRow, single?: ProductoItem) => {
+    setSelectedGroup(group || null)
+    setSelectedSingleProduct(single || null)
+    setIsDetailsOpen(true)
+  }
+
+  const handleToggleExpand = (id: string) => {
+    setExpandedParents((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  // Lista de categorías únicas
+  const categoryNamesList = useMemo(() => {
+    const set = new Set<string>()
+    categorias.forEach((c) => set.add(c.nombre))
+    productos.forEach((p) => {
+      if (p.lineaCategoria) set.add(p.lineaCategoria.trim())
+    })
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
+  }, [categorias, productos])
+
+  // KPIs
+  const totalModelos = productos.length
+  const activosCount = useMemo(() => productos.filter((p) => p.activo).length, [productos])
+  const descontinuadosCount = useMemo(() => productos.filter((p) => !p.activo).length, [productos])
+  const conStockCount = useMemo(() => productos.filter((p) => p.activo && (p.stock || 0) > 0).length, [productos])
+  const bajoStockCount = useMemo(
+    () => productos.filter((p) => p.activo && p.controlarStock && (p.stock || 0) > 0 && (p.stock || 0) <= 2).length,
+    [productos]
+  )
+  const agotadosCount = useMemo(
+    () => productos.filter((p) => p.activo && p.controlarStock && (p.stock || 0) <= 0).length,
+    [productos]
+  )
+  const bggCount = useMemo(() => productos.filter((p) => p.bggId != null && Number(p.bggId) > 0).length, [productos])
+
+  // Filtrado reactivo de productos
+  const filteredProductos = useMemo(() => {
+    let list = productos
+
+    if (estadoFilter === 'ACTIVOS') {
+      list = list.filter((p) => p.activo)
+    } else if (estadoFilter === 'DESCONTINUADOS') {
+      list = list.filter((p) => !p.activo)
+    }
+
+    if (stockFilter === 'EN_STOCK') {
+      list = list.filter((p) => (p.stock || 0) > 0)
+    } else if (stockFilter === 'BAJO_STOCK') {
+      list = list.filter((p) => p.controlarStock && (p.stock || 0) > 0 && (p.stock || 0) <= 2)
+    } else if (stockFilter === 'AGOTADOS') {
+      list = list.filter((p) => p.controlarStock && (p.stock || 0) <= 0)
+    } else if (stockFilter === 'A_PEDIDO') {
+      list = list.filter((p) => !p.controlarStock)
+    }
+
+    if (categoriaFilter !== 'TODAS') {
+      list = list.filter((p) => (p.lineaCategoria || '').toLowerCase() === categoriaFilter.toLowerCase())
+    }
+
+    if (search.trim()) {
+      const q = search.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+      list = list.filter((p) => {
+        const nombre = (p.nombreModelo || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+        const cat = (p.lineaCategoria || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+        const bgg = p.bggId ? p.bggId.toString() : ''
+        return nombre.includes(q) || cat.includes(q) || bgg.includes(q)
+      })
+    }
+
+    // Ordenamiento
+    return [...list].sort((a, b) => {
+      if (ordenFilter === 'NOMBRE_ASC') {
+        return a.nombreModelo.localeCompare(b.nombreModelo, 'es', { sensitivity: 'base' })
+      }
+      if (ordenFilter === 'NOMBRE_DESC') {
+        return b.nombreModelo.localeCompare(a.nombreModelo, 'es', { sensitivity: 'base' })
+      }
+      if (ordenFilter === 'COSTO_ASC') {
+        return a.costoBase - b.costoBase
+      }
+      if (ordenFilter === 'COSTO_DESC') {
+        return b.costoBase - a.costoBase
+      }
+      if (ordenFilter === 'MARGEN_DESC') {
+        const margA = a.costoBase > 0 ? (a.precioMercado - a.costoBase) / a.costoBase : 0
+        const margB = b.costoBase > 0 ? (b.precioMercado - b.costoBase) / b.costoBase : 0
+        return margB - margA
+      }
+      if (ordenFilter === 'BGG_RATING_DESC') {
+        const ratA = a.bggRating ? Number(a.bggRating) : 0
+        const ratB = b.bggRating ? Number(b.bggRating) : 0
+        return ratB - ratA
+      }
+      // RECIENTES por defecto: Activos primero, luego orden por fecha o nombre
+      if (a.activo && !b.activo) return -1
+      if (!a.activo && b.activo) return 1
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    })
+  }, [productos, estadoFilter, stockFilter, categoriaFilter, search, ordenFilter])
+
+  // Agrupamiento estructurado para la tabla y tarjetas
+  const groupedRows = useMemo(() => {
+    return groupProducts(filteredProductos, productos)
+  }, [filteredProductos, productos])
+
+  // Formatters
+  const formatCurrency = (val: number) =>
+    `S/ ${val.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+  const calcMargen = (precio: number, costo: number) => {
+    if (costo <= 0) return precio > 0 ? '+100%' : '+0%'
+    const margen = ((precio - costo) / costo) * 100
+    return margen >= 0 ? `+${margen.toFixed(0)}%` : `${margen.toFixed(0)}%`
+  }
+
+  // Copiar cotización
+  const handleCopiarCotizacion = (p: ProductoItem) => {
+    const message = `🎲 *${p.nombreModelo}* - Precio: ${formatCurrency(p.precioMercado)}`
+    navigator.clipboard.writeText(message)
+    setCopiedId(p.id)
+    setTimeout(() => setCopiedId(null), 2000)
+    toast.success(`Cotización de "${p.nombreModelo}" copiada`)
+  }
+
+  // Toggle Activo/Archivado
+  const handleToggleEstado = async (p: ProductoItem) => {
+    const nuevoEstado = !p.activo
+    setProductos((prev) =>
+      prev.map((item) => (item.id === p.id ? { ...item, activo: nuevoEstado } : item))
+    )
+
+    try {
+      await toggleEstadoProducto(p.id)
+      toast.success(`"${p.nombreModelo}" marcado como ${nuevoEstado ? 'Activo' : 'Archivado'}`)
+    } catch (e: any) {
+      toast.error('Error al cambiar estado: ' + e.message)
+      setProductos((prev) =>
+        prev.map((item) => (item.id === p.id ? { ...item, activo: !nuevoEstado } : item))
+      )
+    }
+  }
+
+  // Duplicar producto
+  const handleDuplicar = async (p: ProductoItem) => {
+    try {
+      const duplicado = await duplicarProducto(p.id)
+      setProductos((prev) => [duplicado, ...prev])
+      toast.success(`Juego "${duplicado.nombreModelo}" duplicado`)
+    } catch (e: any) {
+      toast.error('Error al duplicar juego: ' + e.message)
+    }
+  }
+
+  const handleDuplicarGroup = async (group: ProductGroupRow) => {
+    try {
+      const ids = group.variants.map((v) => v.producto.id)
+      const dups = await duplicarModeloConVariantes(ids)
+      setProductos((prev) => [...dups, ...prev])
+      toast.success(`Grupo "${group.baseName}" duplicado (${dups.length} versiones)`)
+    } catch (e: any) {
+      toast.error('Error al duplicar grupo: ' + e.message)
+    }
+  }
+
+  // Eliminar producto
+  const handleDeleteProduct = async (p: ProductoItem) => {
+    if (!confirm(`¿Estás seguro de eliminar o archivar "${p.nombreModelo}"?`)) return
+
+    try {
+      const res = await deleteProducto(p.id)
+      if (res.discontinued) {
+        setProductos((prev) =>
+          prev.map((item) => (item.id === p.id ? { ...item, activo: false } : item))
+        )
+        toast.info(res.message)
+      } else {
+        setProductos((prev) => prev.filter((item) => item.id !== p.id))
+        toast.success(res.message)
+      }
+    } catch (e: any) {
+      toast.error('Error al eliminar: ' + e.message)
+    }
+  }
+
+  const handleDeleteGroup = async (group: ProductGroupRow) => {
+    if (!confirm(`¿Estás seguro de eliminar el juego "${group.baseName}" y todas sus versiones?`)) return
+
+    try {
+      const ids = group.variants.map((v) => v.producto.id)
+      const res = await deleteModeloConVariantes(ids)
+      if (res.discontinuedIds.length > 0) {
+        const discSet = new Set(res.discontinuedIds)
+        setProductos((prev) =>
+          prev.map((p) => (discSet.has(p.id) ? { ...p, activo: false } : p))
+        )
+      }
+      if (res.deletedIds.length > 0) {
+        const delSet = new Set(res.deletedIds)
+        setProductos((prev) => prev.filter((p) => !delSet.has(p.id)))
+      }
+      toast.success(res.message)
+    } catch (e: any) {
+      toast.error('Error al eliminar grupo: ' + e.message)
+    }
+  }
+
+  // Guardar en modal de formulario
+  const handleProductSaved = (saved: ProductoItem) => {
+    setProductos((prev) => {
+      const exists = prev.some((p) => p.id === saved.id)
+      if (exists) {
+        return prev.map((p) => (p.id === saved.id ? saved : p))
+      }
+      return [saved, ...prev]
+    })
+  }
+
+  // Sincronización masiva de BoardGameGeek
   const handleSyncBgg = async () => {
-    // Filtrar los que tienen ID válido
     const gamesWithBgg = productos.filter((p) => p.bggId && Number(p.bggId) > 0)
     if (gamesWithBgg.length === 0) {
-      toast.info('No hay juegos con BGG ID configurado')
+      toast.info('No hay juegos con código BGG configurado')
       return
     }
 
@@ -243,7 +429,7 @@ export function CatalogoClient({
       const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${token}`,
-          'User-Agent': 'BGG-Personal-Collection-Tracker/1.0 (hobby project)',
+          'User-Agent': 'BGG-Personal-Collection-Tracker/1.0',
           Accept: 'application/xml,text/xml,*/*',
         },
       })
@@ -276,15 +462,10 @@ export function CatalogoClient({
         const maxPlayers = parseInt(item.maxplayers?.['@_value'], 10) || undefined
         const playtime = parseInt(item.playingtime?.['@_value'], 10) || undefined
         const minAgeVal = parseInt(item.minage?.['@_value'], 10) || undefined
-        const edadMinima = minAgeVal && minAgeVal > 0 ? minAgeVal : undefined
-        const duracionMinutos = playtime && playtime > 0 ? playtime : undefined
 
         let numJugadores: string | undefined = undefined
         if (minPlayers && maxPlayers) {
-          numJugadores =
-            minPlayers === maxPlayers
-              ? `${minPlayers} jugadores`
-              : `${minPlayers} - ${maxPlayers} jugadores`
+          numJugadores = minPlayers === maxPlayers ? `${minPlayers} jugadores` : `${minPlayers} - ${maxPlayers} jugadores`
         } else if (minPlayers) {
           numJugadores = `${minPlayers}+ jugadores`
         }
@@ -300,27 +481,7 @@ export function CatalogoClient({
           .filter((l: any) => l?.['@_type'] === 'boardgamemechanic')
           .map((l: any) => l?.['@_value'])
           .filter(Boolean)
-
-        const mechanicMap: Record<string, string> = {
-          'Hidden Roles': 'Roles Ocultos',
-          'Player Elimination': 'Eliminación de Jugadores',
-          'Voting': 'Votación',
-          'Variable Player Powers': 'Poderes Variables',
-          'Deduction': 'Deducción',
-          'Bluffing': 'Faroleo / Engaño',
-          'Hand Management': 'Gestión de Mano',
-          'Set Collection': 'Colección de Sets',
-          'Drafting': 'Drafting de Cartas',
-          'Card Drafting': 'Drafting de Cartas',
-          'Dice Rolling': 'Tirada de Dados',
-          'Worker Placement': 'Colocación de Trabajadores',
-          'Tile Placement': 'Colocación de Losetas',
-          'Cooperative Game': 'Cooperativo',
-          'Pattern Recognition': 'Reconocimiento de Patrones',
-          'Speed Matching': 'Velocidad y Reflejos',
-        }
-        const translatedMechanics = mechanics.slice(0, 4).map((m) => mechanicMap[m] || m)
-        const mecanicas = translatedMechanics.length > 0 ? translatedMechanics.join(', ') : undefined
+        const mecanicas = mechanics.slice(0, 4).join(', ')
 
         let imagenUrl: string | undefined = undefined
         if (typeof item.image === 'string' && item.image.startsWith('http')) {
@@ -336,8 +497,8 @@ export function CatalogoClient({
           bggPlaytime: playtime || null,
           bggRatingCount: ratingCount || null,
           numJugadores: numJugadores || null,
-          edadMinima: edadMinima || null,
-          duracionMinutos: duracionMinutos || null,
+          edadMinima: minAgeVal && minAgeVal > 0 ? minAgeVal : null,
+          duracionMinutos: playtime && playtime > 0 ? playtime : null,
           editorialMarca: editorialMarca || null,
           mecanicas: mecanicas || null,
           idioma: 'Español',
@@ -360,6 +521,9 @@ export function CatalogoClient({
               bggMaxPlayers: upd.bggMaxPlayers,
               bggPlaytime: upd.bggPlaytime,
               imagenUrl: upd.imagenUrl || p.imagenUrl,
+              numJugadores: upd.numJugadores || p.numJugadores,
+              editorialMarca: upd.editorialMarca || p.editorialMarca,
+              mecanicas: upd.mecanicas || p.mecanicas,
             }
           })
         )
@@ -376,712 +540,346 @@ export function CatalogoClient({
     }
   }
 
-  // Close context menu on click outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setActiveMenuId(null)
-      }
-      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
-        setIsExportOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  const formatCurrency = (val: number) => `S/ ${val.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-
-  // Calculate profit margin percentage
-  const calcMargen = (precio: number, costo: number) => {
-    if (costo <= 0) return '+0%'
-    const margen = ((precio - costo) / costo) * 100
-    return margen >= 0 ? `+${margen.toFixed(0)}%` : `${margen.toFixed(0)}%`
-  }
-
-  // Estimate print time (approx 22g/hour as workshop baseline)
-  const estimarTiempoImpresion = (gramos: number) => {
-    if (!gramos || gramos <= 0) return '—'
-    const horas = gramos / 22
-    if (horas < 1) return `${Math.round(horas * 60)} min`
-    return `${horas.toFixed(1)}h`
-  }
-
-  // Categories list for dropdown
-  const categoryNamesList = useMemo(() => {
-    const set = new Set<string>()
-    categorias.forEach(c => set.add(c.nombre))
-    productos.forEach(p => {
-      if (p.lineaCategoria) set.add(p.lineaCategoria.trim())
-    })
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
-  }, [categorias, productos])
-
-  // KPIs
-  const totalModelos = productos.length
-  const activosCount = useMemo(() => productos.filter(p => p.activo).length, [productos])
-  const descontinuadosCount = useMemo(() => productos.filter(p => !p.activo).length, [productos])
-  const categoriasActivasCount = useMemo(() => {
-    const activeCats = new Set(productos.filter(p => p.activo).map(p => p.lineaCategoria))
-    return activeCats.size
-  }, [productos])
-
-  // Stock KPIs
-  const totalUnidadesStock = useMemo(() => productos.reduce((acc, p) => acc + (p.stock || 0), 0), [productos])
-  const conStockCount = useMemo(() => productos.filter(p => p.activo && (p.stock || 0) > 0).length, [productos])
-  const bajoStockCount = useMemo(() => productos.filter(p => p.activo && p.controlarStock && (p.stock || 0) > 0 && (p.stock || 0) <= 2).length, [productos])
-  const agotadosCount = useMemo(() => productos.filter(p => p.activo && p.controlarStock && (p.stock || 0) <= 0).length, [productos])
-
-  // Filtered Products List
-  const filteredProductos = useMemo(() => {
-    let list = productos
-
-    if (estadoFilter === 'ACTIVOS') {
-      list = list.filter(p => p.activo)
-    } else if (estadoFilter === 'DESCONTINUADOS') {
-      list = list.filter(p => !p.activo)
-    }
-
-    if (stockFilter === 'EN_STOCK') {
-      list = list.filter(p => (p.stock || 0) > 0)
-    } else if (stockFilter === 'BAJO_STOCK') {
-      list = list.filter(p => p.controlarStock && (p.stock || 0) > 0 && (p.stock || 0) <= 2)
-    } else if (stockFilter === 'AGOTADOS') {
-      list = list.filter(p => p.controlarStock && (p.stock || 0) <= 0)
-    } else if (stockFilter === 'A_PEDIDO') {
-      list = list.filter(p => !p.controlarStock)
-    }
-
-    if (categoriaFilter !== 'TODAS') {
-      list = list.filter(p => (p.lineaCategoria || '').toLowerCase() === categoriaFilter.toLowerCase())
-    }
-
-    if (search.trim()) {
-      const q = search.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-      list = list.filter(p => {
-        const nombre = (p.nombreModelo || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-        const cat = (p.lineaCategoria || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-        const bgg = p.bggId ? p.bggId.toString() : ''
-
-        return nombre.includes(q) || cat.includes(q) || bgg.includes(q)
-      })
-    }
-
-    return list.sort((a, b) => {
-      if (a.activo && !b.activo) return -1
-      if (!a.activo && b.activo) return 1
-      return a.nombreModelo.localeCompare(b.nombreModelo, 'es', { sensitivity: 'base' })
-    })
-  }, [productos, estadoFilter, stockFilter, categoriaFilter, search])
-
-  // Copy Quotation to Clipboard for WhatsApp: "[Nombre] - Precio: S/ [Mercado]"
-  const handleCopiarCotizacion = (p: ProductoItem) => {
-    const message = `${p.nombreModelo} - Precio: ${formatCurrency(p.precioMercado)}`
-    navigator.clipboard.writeText(message)
-    setCopiedId(p.id)
-    setTimeout(() => setCopiedId(null), 2000)
-    toast.success(`Cotización de "${p.nombreModelo}" copiada`)
-  }
-
-  // Toggle Active/Discontinued
-  const handleToggleEstado = async (p: ProductoItem) => {
-    const nuevoEstado = !p.activo
-    setProductos(prev => prev.map(item => item.id === p.id ? { ...item, activo: nuevoEstado } : item))
-    setActiveMenuId(null)
-
-    try {
-      await toggleEstadoProducto(p.id)
-      toast.success(`"${p.nombreModelo}" marcado como ${nuevoEstado ? 'Activo' : 'Descontinuado'}`)
-    } catch (e: any) {
-      toast.error('Error al cambiar estado: ' + e.message)
-      setProductos(prev => prev.map(item => item.id === p.id ? { ...item, activo: !nuevoEstado } : item))
-    }
-  }
-
-  // Duplicate product
-  const handleDuplicar = async (p: ProductoItem) => {
-    setActiveMenuId(null)
-    try {
-      const duplicado = await duplicarProducto(p.id)
-      setProductos(prev => [duplicado, ...prev])
-      toast.success(`Modelo "${duplicado.nombreModelo}" duplicado`)
-    } catch (e: any) {
-      toast.error('Error al duplicar modelo: ' + e.message)
-    }
-  }
-
-  // Delete product
-  const handleDelete = async (p: ProductoItem) => {
-    setActiveMenuId(null)
-    if (!confirm(`¿Estás seguro de eliminar o archivar "${p.nombreModelo}"?`)) return
-
-    try {
-      const res = await deleteProducto(p.id)
-      if (res.discontinued) {
-        setProductos(prev => prev.map(item => item.id === p.id ? { ...item, activo: false } : item))
-        toast.info(res.message)
-      } else {
-        setProductos(prev => prev.filter(item => item.id !== p.id))
-        toast.success(res.message)
-      }
-    } catch (e: any) {
-      toast.error('Error al eliminar: ' + e.message)
-    }
-  }
-
-  // Open Create Modal
-  const handleOpenCreate = () => {
-    setEditingId(null)
-    setFormData({
-      nombreModelo: '',
-      lineaCategoria: categoryNamesList[0] || 'General',
-      pesoGramos: '0',
-      tiempoHoras: '0',
-      costoBase: '0',
-      precioAmigos: '0',
-      precioMercado: '0',
-      activo: true,
-      stock: '0',
-      controlarStock: false,
-      enOferta: false,
-      precioOferta: '',
-      porcentajeDescuento: '',
-      imagenUrl: '',
-      descripcionWeb: '',
-      destacadoWeb: false,
-      bulletPoint1: '',
-      bulletPoint2: '',
-      bulletPoint3: '',
-      bulletPoint4: '',
-      numJugadores: '',
-      edadMinima: '',
-      duracionMinutos: '',
-      idioma: '',
-      editorialMarca: '',
-      mecanicas: '',
-      bggId: ''
-    })
-    setOpenModal(true)
-  }
-
-  // Open Edit Modal
-  const handleOpenEdit = (p: ProductoItem) => {
-    setEditingId(p.id)
-    const gramos = p.pesoGramos || 0
-    setFormData({
-      nombreModelo: p.nombreModelo,
-      lineaCategoria: p.lineaCategoria || 'General',
-      pesoGramos: gramos > 0 ? gramos.toString() : '',
-      tiempoHoras: gramos > 0 ? (gramos / 22).toFixed(1) : '',
-      costoBase: p.costoBase.toString(),
-      precioAmigos: p.precioAmigos.toString(),
-      precioMercado: p.precioMercado.toString(),
-      activo: p.activo,
-      stock: p.stock?.toString() || '0',
-      controlarStock: p.controlarStock || false,
-      enOferta: p.enOferta || false,
-      precioOferta: p.precioOferta ? p.precioOferta.toString() : '',
-      porcentajeDescuento: (p as any).porcentajeDescuento ? (p as any).porcentajeDescuento.toString() : '',
-      imagenUrl: p.imagenUrl || '',
-      descripcionWeb: p.descripcionWeb || '',
-      destacadoWeb: p.destacadoWeb || false,
-      bulletPoint1: (p as any).bulletPoint1 || '',
-      bulletPoint2: (p as any).bulletPoint2 || '',
-      bulletPoint3: (p as any).bulletPoint3 || '',
-      bulletPoint4: (p as any).bulletPoint4 || '',
-      numJugadores: (p as any).numJugadores || '',
-      edadMinima: (p as any).edadMinima?.toString() || '',
-      duracionMinutos: (p as any).duracionMinutos?.toString() || '',
-      idioma: (p as any).idioma || '',
-      editorialMarca: (p as any).editorialMarca || '',
-      mecanicas: (p as any).mecanicas || '',
-      bggId: (p as any).bggId?.toString() || ''
-    })
-    setOpenModal(true)
-  }
-
-  // Recalculate base cost automatically from grams
-  const handleGramosChange = (val: string) => {
-    const g = parseFloat(val) || 0
-    const horas = g > 0 ? (g / 22).toFixed(1) : ''
-    const costoEstimado = g > 0 ? (g * 0.065).toFixed(2) : ''
-    
-    setFormData(prev => ({
-      ...prev,
-      pesoGramos: val,
-      tiempoHoras: horas,
-      costoBase: costoEstimado || prev.costoBase
-    }))
-  }
-
-  // Oferta Handlers
-  const handleDescuentoChange = (val: string) => {
-    const pMercado = parseFloat(formData.precioMercado) || 0
-    const costoBase = parseFloat(formData.costoBase) || 0
-    let descuento = parseFloat(val) || 0
-
-    if (descuento < 0) descuento = 0
-    if (descuento > 100) descuento = 100
-
-    let nuevoPrecio = pMercado - (pMercado * descuento / 100)
-    
-    // Ensure new price is not less than base cost
-    if (nuevoPrecio < costoBase && costoBase > 0) {
-      nuevoPrecio = costoBase
-      descuento = Math.round(((pMercado - nuevoPrecio) / pMercado) * 100)
-    }
-
-    setFormData(prev => ({
-      ...prev,
-      porcentajeDescuento: descuento.toString(),
-      precioOferta: nuevoPrecio.toFixed(2)
-    }))
-  }
-
-  const handlePrecioOfertaChange = (val: string) => {
-    const pMercado = parseFloat(formData.precioMercado) || 0
-    const costoBase = parseFloat(formData.costoBase) || 0
-    let nuevoPrecio = parseFloat(val) || 0
-
-    if (nuevoPrecio < 0) nuevoPrecio = 0
-    
-    // Ensure new price is not less than base cost
-    if (nuevoPrecio < costoBase && costoBase > 0) {
-      nuevoPrecio = costoBase
-    }
-
-    let descuento = 0
-    if (pMercado > 0 && nuevoPrecio < pMercado) {
-      descuento = Math.round(((pMercado - nuevoPrecio) / pMercado) * 100)
-    }
-
-    setFormData(prev => ({
-      ...prev,
-      precioOferta: nuevoPrecio.toString(),
-      porcentajeDescuento: descuento.toString()
-    }))
-  }
-
-  // Submit Modal
-  const handleSubmitModal = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!formData.nombreModelo.trim()) {
-      toast.error('El nombre del modelo es obligatorio')
+  // Exportar CSV
+  const handleExportCsv = (onlyWithBgg: boolean = true) => {
+    const target = onlyWithBgg ? productos.filter((p) => p.bggId && Number(p.bggId) > 0) : productos
+    if (target.length === 0) {
+      toast.info('No hay productos para exportar con ese criterio')
       return
     }
 
-    const costoBase = parseFloat(formData.costoBase) || 0
-    const precioOferta = formData.precioOferta ? parseFloat(formData.precioOferta) : 0
-    if (formData.enOferta && precioOferta > 0 && precioOferta < costoBase) {
-      toast.error('El precio de oferta no puede ser menor al costo base')
-      return
-    }
+    const headers = ['id', 'bggId', 'nombreModelo', 'categoria', 'precioMercado', 'costoBase', 'stock']
+    const rows = target.map((p) => [
+      p.id,
+      p.bggId ?? '',
+      p.nombreModelo,
+      p.lineaCategoria,
+      p.precioMercado,
+      p.costoBase,
+      p.stock ?? 0,
+    ])
 
-    const payload = {
-      nombreModelo: formData.nombreModelo.trim(),
-      lineaCategoria: formData.lineaCategoria.trim() || 'General',
-      pesoGramos: formData.pesoGramos ? parseFloat(formData.pesoGramos) : 0,
-      costoBase: costoBase,
-      precioAmigos: parseFloat(formData.precioAmigos) || 0,
-      precioMercado: parseFloat(formData.precioMercado) || 0,
-      activo: formData.activo,
-      stock: parseInt(formData.stock) || 0,
-      controlarStock: formData.controlarStock,
-      enOferta: formData.enOferta,
-      precioOferta: formData.enOferta ? (parseFloat(formData.precioOferta) || null) : null,
-      porcentajeDescuento: formData.enOferta ? (parseInt(formData.porcentajeDescuento) || 0) : 0,
-      imagenUrl: formData.imagenUrl.trim() || null,
-      descripcionWeb: formData.descripcionWeb.trim() || null,
-      destacadoWeb: formData.destacadoWeb,
-      bulletPoint1: formData.bulletPoint1.trim() || null,
-      bulletPoint2: formData.bulletPoint2.trim() || null,
-      bulletPoint3: formData.bulletPoint3.trim() || null,
-      bulletPoint4: formData.bulletPoint4.trim() || null,
-      numJugadores: formData.numJugadores.trim() || null,
-      edadMinima: formData.edadMinima ? parseInt(formData.edadMinima) : null,
-      duracionMinutos: formData.duracionMinutos ? parseInt(formData.duracionMinutos) : null,
-      idioma: formData.idioma.trim() || null,
-      editorialMarca: formData.editorialMarca.trim() || null,
-      mecanicas: formData.mecanicas.trim() || null,
-      bggId: formData.bggId ? parseInt(formData.bggId) : null
-    }
-
-    setIsSubmitting(true)
-    try {
-      if (editingId) {
-        const updated = await updateProducto(editingId, payload)
-        setProductos(prev => prev.map(p => p.id === editingId ? updated : p))
-        toast.success(`Modelo "${payload.nombreModelo}" actualizado`)
-      } else {
-        const created = await createProducto(payload)
-        setProductos(prev => [created, ...prev])
-        toast.success(`Modelo "${payload.nombreModelo}" registrado en catálogo`)
+    const escapeCsv = (val: any) => {
+      if (val === null || val === undefined) return ''
+      const str = String(val)
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`
       }
-      setOpenModal(false)
-    } catch (e: any) {
-      toast.error('Error al guardar: ' + e.message)
-    } finally {
-      setIsSubmitting(false)
+      return str
     }
+
+    const csvContent = [headers.join(','), ...rows.map((r) => r.map(escapeCsv).join(','))].join('\r\n')
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const dateStr = new Date().toISOString().split('T')[0]
+    link.href = url
+    link.download = `catalogo_juegos_${onlyWithBgg ? 'bgg_' : ''}${dateStr}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    toast.success(`Exportados ${target.length} juegos (.csv)`)
   }
 
   return (
-    <div className="w-full space-y-4 sm:space-y-6 animate-in fade-in duration-200">
-      
+    <div className="w-full space-y-5 animate-in fade-in duration-200">
       {/* ========================================================================= */}
-      {/* 1. CABECERA Y BARRA DE ACCIONES                                           */}
+      {/* 1. CABECERA & ACCIONES PRINCIPALES                                        */}
       {/* ========================================================================= */}
       <div className="space-y-4">
-        {/* Breadcrumb Contextual */}
-        <div className="flex items-center gap-1.5 text-xs text-[#75695D] font-medium">
-          <Link href="/catalogo" className="hover:text-[#A36F4C] transition-colors flex items-center gap-1">
-            <Package className="h-3.5 w-3.5 text-[#A36F4C]" />
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
+          <Link href="/catalogo" className="hover:text-primary transition-colors flex items-center gap-1">
+            <Package className="h-3.5 w-3.5 text-primary" />
             <span>Catálogo</span>
           </Link>
-          <span className="text-[#D4BEA7]">/</span>
-          <span className="text-[#241C15] font-bold">Catálogo de Productos</span>
+          <span className="text-border">/</span>
+          <span className="text-foreground font-bold">Catálogo de Juegos</span>
         </div>
 
-        {/* Título & Botones de Acción */}
+        {/* Título & Acciones */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-[#241C15] tracking-tight flex items-center gap-2.5">
-              <Boxes className="h-6 w-6 sm:h-7 sm:w-7 text-[#A36F4C] flex-shrink-0" />
-              <span>Catálogo de Juegos</span>
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-foreground tracking-tight flex items-center gap-2.5">
+              <Boxes className="h-6 w-6 sm:h-7 sm:w-7 text-primary shrink-0" />
+              <span>Catálogo de Juegos de Mesa</span>
             </h1>
-            <p className="text-xs sm:text-sm text-[#75695D] mt-1">
-              Juegos de mesa disponibles para venta online y presencial.
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              Administración de inventario, precios y especificaciones de BoardGameGeek
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
-            {/* Dropdown / Botón Exportar BGG CSV */}
-            <div className="relative flex-1 sm:flex-initial" ref={exportMenuRef}>
-              <Button
-                type="button"
-                onClick={() => setIsExportOpen(prev => !prev)}
-                className="w-full sm:w-auto inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#FAF8F5] hover:bg-[#F4EFEA] text-[#241C15] border border-[#E2D9CC] shadow-2xs transition-all cursor-pointer justify-center h-10"
-                title="Exportar archivo CSV con ID de negocio y código BGG"
-              >
-                <FileDown className="h-4 w-4 text-[#A36F4C]" />
-                <span>Exportar BGG (.csv)</span>
-                {bggCount > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-[#EADDD0] text-[#754E31] text-[10px] font-bold">
-                    {bggCount}
-                  </span>
-                )}
-                <ChevronDown className={`h-3.5 w-3.5 text-[#75695D] transition-transform ${isExportOpen ? 'rotate-180' : ''}`} />
-              </Button>
-
-              {isExportOpen && (
-                <div className="absolute right-0 mt-1.5 w-64 bg-white border border-[#E2D9CC] rounded-2xl shadow-xl p-1.5 z-50 animate-in fade-in duration-100">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleExportBggCsv(true)
-                      setIsExportOpen(false)
-                    }}
-                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-[#FAF8F5] transition-colors flex items-center justify-between text-xs font-semibold text-[#241C15] cursor-pointer"
-                  >
-                    <div className="flex flex-col">
-                      <span>Solo vinculados a BGG</span>
-                      <span className="text-[10px] text-[#75695D] font-normal">Con código BGG activo</span>
-                    </div>
-                    <span className="px-2 py-0.5 rounded-full bg-[#EADDD0] text-[#754E31] text-[10px] font-bold">
-                      {bggCount}
-                    </span>
-                  </button>
-
-                  <div className="h-px bg-[#E2D9CC]/60 my-1" />
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleExportBggCsv(false)
-                      setIsExportOpen(false)
-                    }}
-                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-[#FAF8F5] transition-colors flex items-center justify-between text-xs font-semibold text-[#241C15] cursor-pointer"
-                  >
-                    <div className="flex flex-col">
-                      <span>Catálogo completo (BG)</span>
-                      <span className="text-[10px] text-[#75695D] font-normal">Todos los productos con columna BGG</span>
-                    </div>
-                    <span className="px-2 py-0.5 rounded-full bg-[#FAF8F5] border border-[#E2D9CC] text-[#75695D] text-[10px] font-bold">
-                      {productos.length}
-                    </span>
-                  </button>
-                </div>
-              )}
-            </div>
-
+          <div className="flex items-center gap-2.5 flex-wrap">
             {/* Botón Sincronizar BGG */}
             <Button
               type="button"
+              variant="outline"
+              size="sm"
               onClick={handleSyncBgg}
-              disabled={isSyncingBgg}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#FAF8F5] hover:bg-[#F4EFEA] text-[#241C15] border border-[#E2D9CC] shadow-2xs transition-all cursor-pointer flex-1 sm:flex-initial justify-center h-10 disabled:opacity-50"
+              disabled={isSyncingBgg || bggCount === 0}
+              className="gap-1.5 text-xs font-bold rounded-xl bg-card hover:bg-secondary border-border cursor-pointer shadow-xs"
+              title="Actualiza ratings y especificaciones de todos los juegos con ID de BGG"
             >
-              <RotateCcw className={`h-4 w-4 text-[#A36F4C] ${isSyncingBgg ? 'animate-spin' : ''}`} />
-              <span>{isSyncingBgg ? 'Sincronizando...' : 'Actualizar BGG'}</span>
+              {isSyncingBgg ? (
+                <>
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary" />
+                  <span>Sincronizando BGG...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                  <span>Sincronizar BGG ({bggCount})</span>
+                </>
+              )}
             </Button>
 
-            {/* Botón Gestionar Categorías */}
-            <Link
-              href="/catalogo/categorias"
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#FAF8F5] hover:bg-[#F4EFEA] text-[#241C15] border border-[#E2D9CC] shadow-2xs transition-all cursor-pointer flex-1 sm:flex-initial justify-center h-10"
-            >
-              <Layers className="h-4 w-4 text-[#A36F4C]" />
-              <span>Categorías</span>
-            </Link>
+            {/* Dropdown Exportar CSV */}
+            <DropdownMenu>
+              <DropdownMenuTrigger className="inline-flex items-center gap-1.5 text-xs font-bold rounded-xl bg-card hover:bg-secondary border border-border px-3 py-1.5 cursor-pointer shadow-xs text-foreground transition-colors outline-none">
+                <FileDown className="h-3.5 w-3.5 text-primary" />
+                <span>Exportar</span>
+                <ChevronDown className="h-3 w-3 opacity-60" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52 bg-card border border-border rounded-xl shadow-lg p-1">
+                <DropdownMenuItem
+                  onClick={() => handleExportCsv(true)}
+                  className="text-xs font-medium px-2.5 py-2 rounded-lg cursor-pointer hover:bg-secondary"
+                >
+                  <span>Solo con código BGG ({bggCount})</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => handleExportCsv(false)}
+                  className="text-xs font-medium px-2.5 py-2 rounded-lg cursor-pointer hover:bg-secondary"
+                >
+                  <span>Catálogo completo ({totalModelos})</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-            {/* Botón Primario + Nuevo Producto */}
+            {/* Botón Nuevo Juego */}
             <Button
               type="button"
+              size="sm"
               onClick={handleOpenCreate}
-              className="bg-[#A36F4C] hover:bg-[#8E5E3E] text-white font-bold text-xs h-10 px-4 rounded-xl shadow-xs cursor-pointer transition-all active:scale-[0.98] flex-1 sm:flex-initial flex items-center gap-2 justify-center"
+              className="gap-1.5 text-xs font-bold rounded-xl shadow-sm cursor-pointer"
             >
-              <Plus className="h-4 w-4 stroke-[2.5]" />
-              <span>Nuevo Producto</span>
+              <Plus className="h-4 w-4" />
+              <span>Nuevo Juego</span>
             </Button>
           </div>
-        </div>
-
-        {/* ========================================================================= */}
-        {/* 2. FILA SUPERIOR DE KPIS (GRID 4 COLUMNAS MINIMALISTA)                    */}
-        {/* ========================================================================= */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* KPI 1: Total Modelos */}
-          <div 
-            onClick={() => {
-              setEstadoFilter('TODOS')
-              setStockFilter('TODOS')
-            }}
-            className={`p-3.5 rounded-2xl border flex flex-col justify-between shadow-xs cursor-pointer transition-all ${
-              estadoFilter === 'TODOS' && stockFilter === 'TODOS'
-                ? 'bg-white border-[#A36F4C] ring-1 ring-[#A36F4C]'
-                : 'bg-white border-[#E2D9CC] hover:bg-[#FAF8F5]'
-            }`}
-          >
-            <div className="flex items-center justify-between text-[#6B7280]">
-              <span className="text-xs font-semibold">Total Catálogo</span>
-              <div className="p-1 rounded-md bg-[#FAF7F4] text-[#A36F4C]">
-                <Boxes className="h-3.5 w-3.5" />
-              </div>
-            </div>
-            <div className="mt-2">
-              <div className="text-xl sm:text-2xl font-black text-[#241C15] font-mono tabular-nums">
-                {totalModelos} <span className="text-xs font-normal font-sans text-[#75695D]">juegos</span>
-              </div>
-              <span className="text-xs text-[#75695D] mt-0.5 block truncate">
-                {totalUnidadesStock} unidades en stock total
-              </span>
-            </div>
-          </div>
-
-          {/* KPI 2: Activos en Venta */}
-          <div 
-            onClick={() => {
-              setEstadoFilter('ACTIVOS')
-              setStockFilter('TODOS')
-            }}
-            className={`p-3.5 rounded-2xl border flex flex-col justify-between shadow-xs cursor-pointer transition-all ${
-              estadoFilter === 'ACTIVOS' && stockFilter === 'TODOS'
-                ? 'bg-white border-[#1E5E3A] ring-1 ring-[#1E5E3A]'
-                : 'bg-white border-[#E2D9CC] hover:bg-[#FAF8F5]'
-            }`}
-          >
-            <div className="flex items-center justify-between text-[#6B7280]">
-              <span className="text-xs font-semibold">Activos en Venta</span>
-              <div className="p-1 rounded-md bg-[#FAF7F4] text-[#1E5E3A]">
-                <PackageCheck className="h-3.5 w-3.5" />
-              </div>
-            </div>
-            <div className="mt-2">
-              <div className="text-xl sm:text-2xl font-black text-[#1E5E3A] font-mono tabular-nums">
-                {activosCount} <span className="text-xs font-normal font-sans text-[#75695D]">modelos</span>
-              </div>
-              <span className="text-xs text-[#1E5E3A] font-medium mt-0.5 block truncate">
-                {conStockCount} con stock disponible
-              </span>
-            </div>
-          </div>
-
-          {/* KPI 3: Alertas de Stock */}
-          <div 
-            onClick={() => {
-              setStockFilter(prev => prev === 'AGOTADOS' ? 'TODOS' : 'AGOTADOS')
-            }}
-            className={`p-3.5 rounded-2xl border flex flex-col justify-between shadow-xs cursor-pointer transition-all ${
-              stockFilter === 'AGOTADOS'
-                ? 'bg-white border-rose-500 ring-1 ring-rose-500'
-                : 'bg-white border-[#E2D9CC] hover:bg-[#FAF8F5]'
-            }`}
-          >
-            <div className="flex items-center justify-between text-[#6B7280]">
-              <span className="text-xs font-semibold">Alertas de Stock</span>
-              <div className={`p-1 rounded-md ${agotadosCount > 0 ? 'bg-rose-50 text-rose-600' : 'bg-[#FAF7F4] text-[#75695D]'}`}>
-                <Archive className="h-3.5 w-3.5" />
-              </div>
-            </div>
-            <div className="mt-2">
-              <div className="text-xl sm:text-2xl font-black text-[#241C15] font-mono tabular-nums">
-                {agotadosCount} <span className="text-xs font-normal font-sans text-rose-600">agotados</span>
-              </div>
-              <span className="text-xs text-[#75695D] mt-0.5 block truncate">
-                {bajoStockCount > 0 ? `${bajoStockCount} juegos con bajo stock (≤2)` : 'Sin quiebre de stock crítico'}
-              </span>
-            </div>
-          </div>
-
-          {/* KPI 4: Categorías Activas */}
-          <Link
-            href="/catalogo/categorias"
-            className="p-3.5 rounded-2xl bg-white border border-[#E2D9CC] hover:bg-[#FAF8F5] flex flex-col justify-between shadow-xs transition-colors"
-          >
-            <div className="flex items-center justify-between text-[#6B7280]">
-              <span className="text-xs font-semibold">Categorías</span>
-              <div className="p-1 rounded-md bg-[#FAF7F4] text-[#A36F4C]">
-                <Layers className="h-3.5 w-3.5" />
-              </div>
-            </div>
-            <div className="mt-2">
-              <div className="text-xl sm:text-2xl font-black text-[#A36F4C] font-mono tabular-nums">
-                {categoriasActivasCount} <span className="text-xs font-normal font-sans text-[#75695D]">familias</span>
-              </div>
-              <span className="text-xs text-[#A36F4C] font-medium mt-0.5 block truncate">
-                Gestionar categorías →
-              </span>
-            </div>
-          </Link>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* 3. BARRA DE HERRAMIENTAS Y FILTROS (SINGLE-ROW TOOLBAR)                   */}
+      {/* 2. KPI CARDS                                                              */}
       {/* ========================================================================= */}
-      <div className="bg-[#FFFFFF] border border-[#E2D9CC] rounded-3xl p-3 sm:p-4 shadow-xs space-y-3">
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-          
-          {/* Lado Izquierdo: Buscador + Dropdown Categorías + Dropdown Stock */}
-          <div className="flex items-center gap-2.5 flex-1 min-w-0 flex-wrap sm:flex-nowrap">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {/* Total Juegos */}
+        <div className="bg-card border border-border p-3 rounded-2xl shadow-2xs space-y-1">
+          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
+            Total Juegos
+          </span>
+          <span className="text-xl font-black text-foreground block font-mono">
+            {totalModelos}
+          </span>
+          <span className="text-[10px] text-muted-foreground block">En catálogo</span>
+        </div>
+
+        {/* Activos */}
+        <div className="bg-card border border-border p-3 rounded-2xl shadow-2xs space-y-1">
+          <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider block">
+            Activos
+          </span>
+          <span className="text-xl font-black text-emerald-800 dark:text-emerald-300 block font-mono">
+            {activosCount}
+          </span>
+          <span className="text-[10px] text-muted-foreground block">Listados para venta</span>
+        </div>
+
+        {/* Con Stock */}
+        <div className="bg-card border border-border p-3 rounded-2xl shadow-2xs space-y-1">
+          <span className="text-[10px] font-bold text-primary uppercase tracking-wider block">
+            Con Stock
+          </span>
+          <span className="text-xl font-black text-primary block font-mono">
+            {conStockCount}
+          </span>
+          <span className="text-[10px] text-muted-foreground block">Disponibles</span>
+        </div>
+
+        {/* Bajo Stock */}
+        <div className="bg-card border border-border p-3 rounded-2xl shadow-2xs space-y-1">
+          <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider block">
+            Bajo Stock
+          </span>
+          <span className="text-xl font-black text-amber-800 dark:text-amber-300 block font-mono">
+            {bajoStockCount}
+          </span>
+          <span className="text-[10px] text-muted-foreground block">≤ 2 unidades</span>
+        </div>
+
+        {/* Agotados */}
+        <div className="bg-card border border-border p-3 rounded-2xl shadow-2xs space-y-1">
+          <span className="text-[10px] font-bold text-rose-700 dark:text-rose-300 uppercase tracking-wider block">
+            Agotados
+          </span>
+          <span className="text-xl font-black text-rose-700 dark:text-rose-300 block font-mono">
+            {agotadosCount}
+          </span>
+          <span className="text-[10px] text-muted-foreground block">0 unidades</span>
+        </div>
+
+        {/* Con BGG ID */}
+        <div className="bg-card border border-border p-3 rounded-2xl shadow-2xs space-y-1">
+          <span className="text-[10px] font-bold text-primary uppercase tracking-wider block">
+            Con BGG
+          </span>
+          <span className="text-xl font-black text-foreground block font-mono">
+            {bggCount}
+          </span>
+          <span className="text-[10px] text-muted-foreground block">Con ficha enlazada</span>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 3. TOOLBAR & BARRA DE FILTROS                                             */}
+      {/* ========================================================================= */}
+      <div className="bg-card border border-border p-4 rounded-2xl shadow-2xs space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          {/* Lado Izquierdo: Buscador + Filtros */}
+          <div className="flex flex-1 items-center gap-2.5 flex-wrap">
             {/* Buscador */}
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#75695D]" />
-              <Input 
-                placeholder="Buscar juego, categoría o código BGG..."
+            <div className="relative min-w-[200px] flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 pr-8 bg-[#F8F6F2] border-[#E2D9CC] text-[#241C15] placeholder:text-[#75695D] text-xs sm:text-sm rounded-2xl h-10 focus:border-[#A36F4C] focus:bg-[#FFFFFF] transition-all"
+                placeholder="Buscar por juego, categoría o #BGG..."
+                className="pl-9 pr-8 h-10 text-xs rounded-xl bg-secondary/30 border-border"
               />
               {search && (
-                <button 
+                <button
+                  type="button"
                   onClick={() => setSearch('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#75695D] hover:text-[#241C15] p-1 rounded-md cursor-pointer"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground cursor-pointer"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
               )}
             </div>
 
-            {/* Dropdown de Categorías */}
+            {/* Categoría */}
             <select
               value={categoriaFilter}
               onChange={(e) => setCategoriaFilter(e.target.value)}
-              className="h-10 px-3 bg-[#F8F6F2] border border-[#E2D9CC] text-xs font-bold text-[#241C15] rounded-2xl focus:border-[#A36F4C] focus:bg-white cursor-pointer min-w-[140px]"
+              className="h-10 px-3 bg-secondary/30 border border-border text-xs font-bold text-foreground rounded-xl focus:border-primary cursor-pointer min-w-[130px]"
             >
               <option value="TODAS">Todas las Categorías</option>
-              {categoryNamesList.map(cat => (
+              {categoryNamesList.map((cat) => (
                 <option key={cat} value={cat}>
-                  {cat} ({productos.filter(p => p.lineaCategoria.toLowerCase() === cat.toLowerCase()).length})
+                  {cat}
                 </option>
               ))}
             </select>
 
-            {/* Dropdown de Stock */}
+            {/* Stock */}
             <select
               value={stockFilter}
               onChange={(e) => setStockFilter(e.target.value as StockFilter)}
-              className="h-10 px-3 bg-[#F8F6F2] border border-[#E2D9CC] text-xs font-bold text-[#241C15] rounded-2xl focus:border-[#A36F4C] focus:bg-white cursor-pointer min-w-[145px]"
+              className="h-10 px-3 bg-secondary/30 border border-border text-xs font-bold text-foreground rounded-xl focus:border-primary cursor-pointer min-w-[130px]"
             >
               <option value="TODOS">Todos los Stocks</option>
               <option value="EN_STOCK">Con Stock ({conStockCount})</option>
               <option value="BAJO_STOCK">Bajo Stock (≤2) ({bajoStockCount})</option>
               <option value="AGOTADOS">Agotados (0) ({agotadosCount})</option>
-              <option value="A_PEDIDO">A Pedido / Sin Control</option>
+              <option value="A_PEDIDO">A Pedido</option>
             </select>
           </div>
 
-          {/* Lado Derecho: Segmented Control Estado */}
-          <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap justify-between sm:justify-end">
-            <div className="bg-[#EAE4DC] p-1 rounded-2xl border border-[#D4BEA7] flex items-center gap-1 shadow-2xs">
+          {/* Lado Derecho: Toggle de Estado & Selector de Vista (Tarjetas vs Tabla) */}
+          <div className="flex items-center gap-3 justify-between lg:justify-end flex-wrap">
+            {/* Segmented Control Estado */}
+            <div className="bg-secondary/40 p-1 rounded-xl border border-border flex items-center gap-1 shadow-2xs">
               <button
                 type="button"
                 onClick={() => setEstadoFilter('TODOS')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   estadoFilter === 'TODOS'
-                    ? 'bg-[#FFFFFF] text-[#241C15] shadow-xs'
-                    : 'text-[#75695D] hover:text-[#241C15] hover:bg-[#FFFFFF]/40'
+                    ? 'bg-card text-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                Todos ({productos.length})
+                Todos ({totalModelos})
               </button>
-
               <button
                 type="button"
                 onClick={() => setEstadoFilter('ACTIVOS')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
                   estadoFilter === 'ACTIVOS'
-                    ? 'bg-[#FFFFFF] text-[#1E5E3A] shadow-xs'
-                    : 'text-[#75695D] hover:text-[#241C15] hover:bg-[#FFFFFF]/40'
+                    ? 'bg-card text-emerald-800 dark:text-emerald-300 shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                <span className="h-2 w-2 rounded-full bg-[#1E5E3A]" />
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
                 <span>Activos ({activosCount})</span>
               </button>
-
               <button
                 type="button"
                 onClick={() => setEstadoFilter('DESCONTINUADOS')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   estadoFilter === 'DESCONTINUADOS'
-                    ? 'bg-[#FFFFFF] text-[#75695D] shadow-xs'
-                    : 'text-[#75695D] hover:text-[#241C15] hover:bg-[#FFFFFF]/40'
+                    ? 'bg-card text-muted-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 Archivados ({descontinuadosCount})
               </button>
             </div>
+
+            {/* Alternador de Vista (Tarjetas vs Tabla) */}
+            <div className="bg-secondary/40 p-1 rounded-xl border border-border flex items-center gap-1 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => handleToggleViewMode('cards')}
+                className={`h-8 px-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  viewMode === 'cards'
+                    ? 'bg-card text-primary shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                title="Vista en Tarjetas"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Tarjetas</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleToggleViewMode('table')}
+                className={`h-8 px-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  viewMode === 'table'
+                    ? 'bg-card text-primary shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                title="Vista en Tabla"
+              >
+                <Table2 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Tabla</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Barra de Filtros Activos & Reset si hay búsqueda o filtros aplicados */}
+        {/* Resumen de Filtros Activos & Reset */}
         {(search || estadoFilter !== 'TODOS' || categoriaFilter !== 'TODAS' || stockFilter !== 'TODOS') && (
-          <div className="flex items-center justify-between pt-2 border-t border-[#E2D9CC]/60 text-xs text-[#75695D]">
+          <div className="flex items-center justify-between pt-2 border-t border-border/60 text-xs text-muted-foreground">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-medium">Mostrando:</span>
-              <span className="font-bold text-[#241C15] bg-[#FAF8F5] px-2 py-0.5 rounded-lg border border-[#E2D9CC]">
+              <span>Mostrando:</span>
+              <span className="font-bold text-foreground bg-secondary px-2 py-0.5 rounded-md border border-border">
                 {filteredProductos.length} {filteredProductos.length === 1 ? 'juego' : 'juegos'}
               </span>
-              {search && (
-                <span className="text-[#75695D]">
-                  para &ldquo;<strong className="text-[#241C15]">{search}</strong>&rdquo;
-                </span>
-              )}
-              {categoriaFilter !== 'TODAS' && (
-                <span className="text-[#75695D]">
-                  en <strong>{categoriaFilter}</strong>
-                </span>
-              )}
-              {estadoFilter !== 'TODOS' && (
-                <span className="text-[#75695D]">
-                  estado <strong>{estadoFilter}</strong>
-                </span>
-              )}
-              {stockFilter !== 'TODOS' && (
-                <span className="text-[#75695D]">
-                  stock <strong>{stockFilter === 'EN_STOCK' ? 'Con Stock' : stockFilter === 'BAJO_STOCK' ? 'Bajo Stock' : stockFilter === 'AGOTADOS' ? 'Agotados' : 'A Pedido'}</strong>
-                </span>
-              )}
+              {search && <span>para &ldquo;<strong className="text-foreground">{search}</strong>&rdquo;</span>}
+              {categoriaFilter !== 'TODAS' && <span>en <strong className="text-foreground">{categoriaFilter}</strong></span>}
             </div>
             <button
               type="button"
@@ -1091,7 +889,7 @@ export function CatalogoClient({
                 setCategoriaFilter('TODAS')
                 setStockFilter('TODOS')
               }}
-              className="text-xs text-[#A36F4C] hover:text-[#8E5E3E] font-bold underline flex items-center gap-1 cursor-pointer"
+              className="text-xs text-primary hover:underline font-bold flex items-center gap-1 cursor-pointer"
             >
               <X className="h-3.5 w-3.5" />
               <span>Limpiar filtros</span>
@@ -1101,772 +899,75 @@ export function CatalogoClient({
       </div>
 
       {/* ========================================================================= */}
-      {/* 4. TABLA OPERATIVA PRINCIPAL (EXCLUSIVA Y 100% RESPONSIVE)               */}
+      {/* 4. RENDER DE VISTA HÍBRIDA (CARDS vs TABLA)                               */}
       {/* ========================================================================= */}
-      
-      {/* VISTA ESCRITORIO (>= lg): Tabla ejecutiva table-fixed sin scroll horizontal */}
-      <div className="hidden lg:block w-full bg-[#FFFFFF] border border-[#E2D9CC] rounded-2xl shadow-xs overflow-hidden">
-        <table className="w-full text-left border-collapse table-fixed text-xs">
-          <colgroup>
-            <col className="w-[32%]" />
-            <col className="w-[11%]" />
-            <col className="w-[14%]" />
-            <col className="w-[13%]" />
-            <col className="w-[16%]" />
-            <col className="w-[14%]" />
-          </colgroup>
-          <thead>
-            <tr className="bg-[#FAF8F5] border-b border-[#E2D9CC] text-[#75695D] text-[11px] font-semibold">
-              <th className="py-3.5 px-4 font-bold text-left">Modelo & Familia</th>
-              <th className="py-3.5 px-4 font-bold text-left">Código BGG</th>
-              <th className="py-3.5 px-4 font-bold text-center">Stock</th>
-              <th className="py-3.5 px-4 font-bold text-right">Costo Base</th>
-              <th className="py-3.5 px-4 font-bold text-center">Precio de Venta (Mercado)</th>
-              <th className="py-3.5 px-4 font-bold text-center">Estado</th>
-            </tr>
-          </thead>
-            <tbody className="divide-y divide-[#E2D9CC]">
-              {filteredProductos.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-12 text-center text-[#75695D] italic bg-[#FFFFFF]">
-                    No se encontraron productos con ese criterio de búsqueda
-                  </td>
-                </tr>
-              ) : (
-                filteredProductos.map((p) => {
-                  const gramos = p.pesoGramos || 0
-                  const costo = p.costoBase || 0
-                  const isMenuOpen = activeMenuId === p.id
-
-                  return (
-                    <tr 
-                      key={p.id} 
-                      onClick={() => handleOpenEdit(p)}
-                      className={`h-16 transition-colors cursor-pointer ${
-                        !p.activo ? 'bg-[#FAF8F5]/60 opacity-80' : 'hover:bg-[#FAF8F5]'
-                      }`}
-                    >
-                      {/* Columna 1: Modelo & Familia */}
-                      <td className="py-3 px-4 min-w-[180px]">
-                        <div className="flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-2xl bg-[#F5EBE1] border border-[#D4BEA7] text-[#A36F4C] flex items-center justify-center flex-shrink-0 shadow-2xs">
-                            <Package className="h-4.5 w-4.5 stroke-[2.2]" />
-                          </div>
-                          <div className="min-w-0">
-                            <span className="font-bold text-sm text-[#241C15] block truncate" title={p.nombreModelo}>
-                              {p.nombreModelo}
-                            </span>
-                            <Badge variant="outline" className="text-[10px] px-2 py-0 bg-[#FAF8F5] text-[#75695D] border-[#E2D9CC] mt-0.5">
-                              {p.lineaCategoria || 'General'}
-                            </Badge>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Columna 2: BGG Code */}
-                      <td className="py-3 px-4 text-left text-xs min-w-[80px]">
-                        {p.bggId ? (
-                          <a
-                            href={`https://boardgamegeek.com/boardgame/${p.bggId}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 font-mono font-bold text-[#A36F4C] hover:text-[#754E31] transition-colors bg-[#F5EBE1] px-2 py-0.5 rounded-md border border-[#D4BEA7] cursor-pointer hover:bg-[#EADDD0]"
-                            onClick={(e) => e.stopPropagation()}
-                            title="Ver en BGG"
-                          >
-                            <span>#{p.bggId}</span>
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        ) : (
-                          <span className="text-[#D4BEA7] italic text-[10px]">-</span>
-                        )}
-                      </td>
-
-                      {/* Columna 3: Stock */}
-                      <td className="py-3 px-3 text-center min-w-[100px]">
-                        {p.controlarStock ? (
-                          (p.stock ?? 0) <= 0 ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-[11px] font-bold">
-                              <span className="h-1.5 w-1.5 rounded-full bg-rose-600" />
-                              <span>Agotado (0)</span>
-                            </span>
-                          ) : (p.stock ?? 0) <= 2 ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-bold">
-                              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                              <span>{p.stock} un. (Bajo)</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold font-mono">
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                              <span>{p.stock} un.</span>
-                            </span>
-                          )
-                        ) : (
-                          (p.stock ?? 0) > 0 ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FAF8F5] border border-[#E2D9CC] text-[#75695D] text-[11px] font-medium font-mono" title="Stock referencial (sin control estricto)">
-                              <span>{p.stock} un.</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-[#FAF8F5] border border-[#E2D9CC] text-[#A89F91] text-[10px] font-medium" title="Sin control estricto de existencias">
-                              A pedido
-                            </span>
-                          )
-                        )}
-                      </td>
-
-                      {/* Columna 4: Costo Base */}
-                      <td className="py-3 px-4 text-right font-mono font-semibold text-[#241C15] text-xs min-w-[90px] tabular-nums">
-                        {formatCurrency(costo)}
-                      </td>
-
-                      {/* Columna 5: Niveles de Precios (1 Columna) */}
-                      <td className="py-3 px-4 min-w-[120px]">
-                        <div className="flex justify-center text-center font-mono text-xs tabular-nums">
-                          {/* Mercado */}
-                          <div className="p-1.5 rounded-xl bg-[#FFFFFF] border border-[#A36F4C]/40 shadow-2xs ring-1 ring-[#A36F4C]/10 w-full max-w-[100px]">
-                            <span className="text-[9px] text-[#A36F4C] block font-sans font-bold">Mercado</span>
-                            <span className="font-black text-[#A36F4C] block">
-                              {formatCurrency(p.precioMercado)}
-                            </span>
-                            <span className="text-[9px] text-[#1E5E3A] font-bold block">
-                              {calcMargen(p.precioMercado, costo)}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Columna 6: Estado */}
-                      <td className="py-3 px-4 text-center min-w-[100px]">
-                        {p.activo ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#ECFDF5] border border-[#B4E3C0] text-[#1E5E3A] text-[11px] font-bold">
-                            <span className="h-1.5 w-1.5 rounded-full bg-[#1E5E3A]" />
-                            <span>Activo</span>
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#FAF8F5] border border-[#E2D9CC] text-[#75695D] text-[11px] font-medium">
-                            <span className="h-1.5 w-1.5 rounded-full bg-[#75695D]" />
-                            <span>Archivado</span>
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-      </div>
-
-      {/* VISTA MÓVIL Y TABLET (< lg): Tarjetas táctiles limpias */}
-      <div className="block lg:hidden space-y-3">
-        {filteredProductos.length === 0 ? (
-          <div className="p-8 text-center bg-[#FFFFFF] rounded-3xl border border-dashed border-[#E2D9CC] text-[#75695D] italic text-xs">
-            No se encontraron productos
-          </div>
-        ) : (
-          filteredProductos.map((p) => {
-            const gramos = p.pesoGramos || 0
-            const costo = p.costoBase || 0
-
-            return (
-              <div
-                key={p.id}
-                className={`bg-[#FFFFFF] border rounded-3xl p-4 shadow-2xs space-y-3 ${
-                  !p.activo ? 'border-[#E2D9CC] opacity-85 bg-[#FAF8F5]' : 'border-[#E2D9CC]'
-                }`}
-              >
-                {/* Fila 1: Header móvil con Avatar, Título y Estado */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    <div className="h-9 w-9 rounded-2xl bg-[#F5EBE1] border border-[#D4BEA7] text-[#A36F4C] flex items-center justify-center flex-shrink-0 shadow-2xs">
-                      <Package className="h-4.5 w-4.5 stroke-[2.2]" />
-                    </div>
-                    <div className="min-w-0 flex flex-col items-start">
-                      <span className="font-bold text-sm text-[#241C15] block truncate w-full" title={p.nombreModelo}>
-                        {p.nombreModelo}
-                      </span>
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <Badge variant="outline" className="text-[10px] px-2 py-0 bg-[#FAF8F5] text-[#75695D] border-[#E2D9CC]">
-                          {p.lineaCategoria || 'General'}
-                        </Badge>
-                        {p.bggId && (
-                          <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-mono font-bold text-[#A36F4C] bg-[#F5EBE1] border-[#D4BEA7]">
-                            BGG: #{p.bggId}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {p.activo ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#ECFDF5] border border-[#B4E3C0] text-[#1E5E3A] text-[10px] font-bold shrink-0">
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#1E5E3A]" />
-                      <span>Activo</span>
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#FAF8F5] border border-[#E2D9CC] text-[#75695D] text-[10px] shrink-0 font-medium">
-                      Archivado
-                    </span>
-                  )}
-                </div>
-
-                {/* Fila 2: Stock y Costo Base */}
-                <div className="flex items-center justify-between text-xs bg-[#FAF8F5] p-2.5 rounded-2xl border border-[#E2D9CC]/70">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-[#75695D] font-medium">Stock:</span>
-                    {p.controlarStock ? (
-                      (p.stock ?? 0) <= 0 ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold">
-                          <span className="h-1.5 w-1.5 rounded-full bg-rose-600" />
-                          Agotado (0)
-                        </span>
-                      ) : (p.stock ?? 0) <= 2 ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-bold">
-                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                          {p.stock} un. (Bajo)
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold font-mono">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                          {p.stock} un.
-                        </span>
-                      )
-                    ) : (
-                      <span className="text-[10px] text-[#75695D] bg-[#FFFFFF] px-2 py-0.5 rounded-full border border-[#E2D9CC]">
-                        {(p.stock ?? 0) > 0 ? `${p.stock} un. (A pedido)` : 'A pedido'}
-                      </span>
-                    )}
-                  </div>
-                  <span className="font-bold font-mono text-[#241C15] text-xs">
-                    Costo: {formatCurrency(costo)}
-                  </span>
-                </div>
-
-                {/* Fila 3: Precio de Venta (1 Col) */}
-                <div className="flex justify-center text-center font-mono text-xs tabular-nums">
-                  <div className="p-1.5 bg-[#FFFFFF] rounded-xl border border-[#A36F4C]/40 ring-1 ring-[#A36F4C]/10 w-full max-w-[120px]">
-                    <span className="text-[9px] text-[#A36F4C] block font-sans font-bold">Mercado</span>
-                    <span className="font-black text-[#A36F4C] block">{formatCurrency(p.precioMercado)}</span>
-                    <span className="text-[9px] text-[#1E5E3A] font-bold block">{calcMargen(p.precioMercado, costo)}</span>
-                  </div>
-                </div>
-
-                {/* Fila 4: Acciones Móvil */}
-                <div className="pt-2 border-t border-[#E2D9CC]/70 flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleCopiarCotizacion(p)}
-                    className="flex-1 h-8 px-3 rounded-xl border border-[#E2D9CC] bg-[#FFFFFF] hover:bg-[#F4EFEA] text-[#241C15] font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs"
-                  >
-                    {copiedId === p.id ? (
-                      <>
-                        <Check className="h-3.5 w-3.5 text-[#1E5E3A]" />
-                        <span className="text-[#1E5E3A]">¡Copiado!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Share2 className="h-3.5 w-3.5 text-[#A36F4C]" />
-                        <span>Copiar Cotización</span>
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleOpenEdit(p)}
-                    className="h-8 px-3 rounded-xl border border-[#E2D9CC] bg-[#FFFFFF] hover:bg-[#F4EFEA] text-[#75695D] hover:text-[#A36F4C] font-bold text-xs flex items-center gap-1 shadow-2xs"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                    <span>Editar</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleDuplicar(p)}
-                    className="h-8 w-8 rounded-xl border border-[#E2D9CC] bg-[#FFFFFF] hover:bg-[#F4EFEA] text-[#75695D] flex items-center justify-center shadow-2xs"
-                    title="Duplicar"
-                  >
-                    <CopyPlus className="h-3.5 w-3.5" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleToggleEstado(p)}
-                    className={`h-8 w-8 rounded-xl border flex items-center justify-center shadow-2xs ${
-                      p.activo ? 'border-[#E2D9CC] text-[#75695D]' : 'border-[#B4E3C0] bg-[#EBF7EE] text-[#1E5E3A]'
-                    }`}
-                    title={p.activo ? 'Descontinuar' : 'Reactivar'}
-                  >
-                    {p.activo ? <Archive className="h-3.5 w-3.5" /> : <RotateCcw className="h-3.5 w-3.5" />}
-                  </button>
-                </div>
-              </div>
-            )
-          })
-        )}
-      </div>
+      {viewMode === 'cards' ? (
+        <ProductCardGrid
+          rows={groupedRows}
+          onViewDetail={handleOpenDetail}
+          onEdit={handleOpenEdit}
+          onEditGroup={handleOpenEditGroup}
+          onDuplicar={handleDuplicar}
+          onDuplicarGroup={handleDuplicarGroup}
+          onDeleteProduct={handleDeleteProduct}
+          onDeleteGroup={handleDeleteGroup}
+          onToggleEstado={handleToggleEstado}
+          onCopiarCotizacion={handleCopiarCotizacion}
+          formatCurrency={formatCurrency}
+          calcMargen={calcMargen}
+          copiedId={copiedId}
+        />
+      ) : (
+        <ProductsTableView
+          rows={groupedRows}
+          productos={filteredProductos}
+          allCatalogProductos={productos}
+          expandedParents={expandedParents}
+          onToggleExpand={handleToggleExpand}
+          onViewDetail={handleOpenDetail}
+          onEdit={handleOpenEdit}
+          onEditGroup={handleOpenEditGroup}
+          onCopiarCotizacion={handleCopiarCotizacion}
+          onToggleEstado={handleToggleEstado}
+          onDuplicar={handleDuplicar}
+          onDuplicarGroup={handleDuplicarGroup}
+          onDeleteProduct={handleDeleteProduct}
+          onDeleteGroup={handleDeleteGroup}
+          copiedId={copiedId}
+          formatCurrency={formatCurrency}
+          calcMargen={calcMargen}
+          ordenFilter={ordenFilter}
+          onOrdenFilterChange={setOrdenFilter}
+        />
+      )}
 
       {/* ========================================================================= */}
-      {/* 5. MODAL: CREAR / EDITAR PRODUCTO (2 COLUMNAS)                           */}
+      {/* 5. MODALES                                                                */}
       {/* ========================================================================= */}
-      <Dialog open={openModal} onOpenChange={setOpenModal}>
-        <DialogContent showCloseButton={false} className="bg-[#FFFFFF] border border-[#E2D9CC] text-[#241C15] w-[95vw] sm:max-w-[560px] max-h-[92dvh] overflow-y-auto p-0 rounded-3xl shadow-2xl z-50">
-          <form onSubmit={handleSubmitModal} className="p-5 sm:p-6 space-y-4">
-            
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-[#E2D9CC] pb-3.5">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-2xl bg-[#F5EBE1] border border-[#D4BEA7] text-[#A36F4C] flex items-center justify-center flex-shrink-0 shadow-2xs">
-                  {editingId ? <Pencil className="h-5 w-5" /> : <Boxes className="h-5 w-5" />}
-                </div>
-                <div>
-                  <DialogTitle className="text-base sm:text-lg font-black text-[#241C15]">
-                    {editingId ? 'Editar Juego de Mesa' : 'Registrar Juego de Mesa'}
-                  </DialogTitle>
-                  <DialogDescription className="text-xs text-[#75695D] mt-0.5">
-                    Define costos de compra, precios de venta y detalles para la web
-                  </DialogDescription>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setOpenModal(false)}
-                className="text-[#75695D] hover:text-[#241C15] p-1.5 rounded-xl hover:bg-[#F4EFEA] transition-colors cursor-pointer"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+      <ProductFormModal
+        isOpen={isFormOpen}
+        onClose={() => setIsFormOpen(false)}
+        onSaved={handleProductSaved}
+        editingProduct={editingProduct}
+        categoryNamesList={categoryNamesList}
+      />
 
-            {/* Formulario en 2 Columnas */}
-            <div className="space-y-4">
-              
-              {/* Fila 1: Nombre & Categoría */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-[#241C15] uppercase tracking-wider">
-                    Nombre del Juego *
-                  </Label>
-                  <Input 
-                    value={formData.nombreModelo}
-                    onChange={(e) => setFormData(prev => ({ ...prev, nombreModelo: e.target.value }))}
-                    placeholder="Ej: Catan, Fantasma Blitz..."
-                    required
-                    autoFocus
-                    className="bg-[#F8F6F2] border-[#E2D9CC] rounded-xl text-sm font-bold text-[#241C15] h-10"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-[#241C15] uppercase tracking-wider">
-                    Categoría / Familia *
-                  </Label>
-                  <Input 
-                    value={formData.lineaCategoria}
-                    onChange={(e) => setFormData(prev => ({ ...prev, lineaCategoria: e.target.value }))}
-                    placeholder="Ej: Juegos Familiares, Estrategia..."
-                    required
-                    list="categorias-list"
-                    className="bg-[#F8F6F2] border-[#E2D9CC] rounded-xl text-sm font-bold text-[#241C15] h-10"
-                  />
-                  <datalist id="categorias-list">
-                    {categoryNamesList.map(cat => (
-                      <option key={cat} value={cat} />
-                    ))}
-                  </datalist>
-                </div>
-
-                {/* BGG ID justo abajo del nombre */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-bold text-[#241C15] uppercase tracking-wider flex items-center gap-1.5">
-                      <Dices className="h-3.5 w-3.5 text-indigo-600" />
-                      BGG ID (BoardGameGeek)
-                    </Label>
-                    <a
-                      href={formData.bggId ? `https://boardgamegeek.com/boardgame/${formData.bggId}` : (formData.nombreModelo ? `https://boardgamegeek.com/geeksearch.php?action=search&objecttype=boardgame&q=${encodeURIComponent(formData.nombreModelo)}` : 'https://boardgamegeek.com')}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[11px] text-indigo-600 hover:text-indigo-800 hover:underline font-bold flex items-center gap-1"
-                    >
-                      Buscar en BGG ↗
-                    </a>
-                  </div>
-                  <Input
-                    type="number"
-                    value={formData.bggId}
-                    onChange={(e) => setFormData(prev => ({ ...prev, bggId: e.target.value }))}
-                    placeholder="Ej: 83195"
-                    className="bg-[#F8F6F2] border-[#E2D9CC] rounded-xl text-sm font-mono font-bold text-[#241C15] h-10"
-                  />
-                  <p className="text-[10px] text-[#75695D]">
-                    Al guardar, la web mostrará el rating real de BGG automáticamente.
-                  </p>
-                </div>
-
-                <div className="flex items-center">
-                  <div className="w-full p-2.5 bg-[#FAF8F5] border border-[#E2D9CC] rounded-xl text-xs flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <span className="font-bold text-[#241C15] block truncate">
-                        {formData.bggId ? `ID Vinculado: #${formData.bggId}` : 'Vincular con BGG'}
-                      </span>
-                      <span className="text-[10px] text-[#75695D] block truncate">
-                        {formData.bggId ? 'Calificación sincronizada con BoardGameGeek' : 'Busca el juego en BGG y copia su ID numérico'}
-                      </span>
-                    </div>
-                    {formData.bggId && (
-                      <a
-                        href={`https://boardgamegeek.com/boardgame/${formData.bggId}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="shrink-0 px-2 py-1 bg-white border border-[#E2D9CC] rounded-lg text-[10px] font-bold text-indigo-600 hover:bg-indigo-50 flex items-center gap-1 shadow-2xs"
-                      >
-                        Ver en BGG <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Fila 2: Costo de Compra */}
-              <div className="p-3.5 bg-[#FAF8F5] border border-[#E2D9CC] rounded-2xl space-y-2">
-                <span className="text-xs font-bold text-[#241C15] uppercase tracking-wider flex items-center gap-1.5">
-                  <Calculator className="h-3.5 w-3.5 text-[#A36F4C]" />
-                  Costo de Compra
-                </span>
-
-                <div className="space-y-1">
-                  <Label className="text-[11px] font-bold text-[#1E5E3A]">Costo Base de Compra (S/)</Label>
-                  <Input 
-                    type="number"
-                    step="0.01"
-                    value={formData.costoBase}
-                    onChange={(e) => setFormData(prev => ({ ...prev, costoBase: e.target.value }))}
-                    placeholder="0.00"
-                    required
-                    className="bg-white border-[#B4E3C0] text-[#1E5E3A] rounded-xl text-xs font-mono font-black h-9"
-                  />
-                </div>
-              </div>
-
-              {/* Fila 3: Precios de Venta & Márgenes en Tiempo Real */}
-              <div className="space-y-2">
-                <Label className="text-xs font-bold text-[#241C15] uppercase tracking-wider">
-                  Precios de Venta (S/)
-                </Label>
-
-                <div className="grid grid-cols-1 gap-3">
-                  {/* Mercado */}
-                  <div className="space-y-1 p-2.5 bg-[#FAF8F5] rounded-xl border border-[#A36F4C]/40 ring-1 ring-[#A36F4C]/10">
-                    <div className="flex items-center justify-between text-[10px]">
-                      <span className="font-bold text-[#A36F4C]">Mercado</span>
-                      <span className="font-mono font-bold text-[#1E5E3A]">
-                        {calcMargen(parseFloat(formData.precioMercado) || 0, parseFloat(formData.costoBase) || 0)}
-                      </span>
-                    </div>
-                    <Input 
-                      type="number"
-                      step="0.5"
-                      value={formData.precioMercado}
-                      onChange={(e) => setFormData(prev => ({ ...prev, precioMercado: e.target.value }))}
-                      placeholder="30.00"
-                      className="bg-white border-[#A36F4C]/50 rounded-lg text-xs font-mono font-black h-9 text-[#A36F4C]"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Fila 4: Estado Inicial */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-[#241C15] uppercase tracking-wider">
-                  Estado del Producto
-                </Label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, activo: true }))}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                      formData.activo
-                        ? 'bg-[#EBF7EE] text-[#1E5E3A] border-[#B4E3C0] shadow-2xs'
-                        : 'bg-[#F8F6F2] text-[#75695D] border-[#E2D9CC]'
-                    }`}
-                  >
-                    🟢 Activo en Venta
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, activo: false }))}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                      !formData.activo
-                        ? 'bg-[#FAF8F5] text-[#75695D] border-[#D4BEA7] shadow-2xs'
-                        : 'bg-[#F8F6F2] text-[#75695D] border-[#E2D9CC]'
-                    }`}
-                  >
-                    📁 Descontinuado
-                  </button>
-                </div>
-              </div>
-
-              {/* Nueva Fila 5: Configuración de Tienda Web */}
-              <div className="p-3.5 bg-white border border-[#E2D9CC] rounded-2xl space-y-4 shadow-sm">
-                <div className="flex items-center justify-between pb-2 border-b border-[#E2D9CC]/50">
-                  <span className="text-xs font-bold text-[#241C15] uppercase tracking-wider flex items-center gap-1.5">
-                    <Globe className="h-3.5 w-3.5 text-[#1E5E3A]" />
-                    Configuración Tienda Web
-                  </span>
-                </div>
-
-                {/* Stock y Oferta */}
-                <div className="space-y-4">
-                  {/* Bloque Stock */}
-                  <div className="p-3 bg-[#FAF8F5] border border-[#E2D9CC] rounded-2xl space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs font-bold text-[#241C15] flex items-center gap-1.5">
-                        <Boxes className="h-4 w-4 text-[#A36F4C]" />
-                        Inventario Físico & Control de Stock
-                      </Label>
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={formData.controlarStock}
-                          onChange={(e) => setFormData(prev => ({ ...prev, controlarStock: e.target.checked }))}
-                          className="rounded border-[#E2D9CC] text-[#A36F4C] focus:ring-[#A36F4C]"
-                        />
-                        <span className="text-[11px] font-bold text-[#A36F4C]">Controlar Stock</span>
-                      </label>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
-                      <div className="space-y-1">
-                        <Label className="text-[10px] font-bold text-[#75695D] uppercase tracking-wider">Unidades Disponibles</Label>
-                        <div className="relative">
-                          <Input
-                            type="number"
-                            min="0"
-                            value={formData.stock}
-                            onChange={(e) => {
-                              const val = e.target.value
-                              setFormData(prev => ({ 
-                                ...prev, 
-                                stock: val,
-                                controlarStock: prev.controlarStock || (parseInt(val) > 0)
-                              }))
-                            }}
-                            placeholder="0"
-                            className="bg-white border-[#E2D9CC] rounded-xl text-xs h-9 pr-14 font-mono font-bold"
-                          />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-[#75695D] font-bold pointer-events-none">
-                            unid.
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-[11px] text-[#75695D] bg-white p-2.5 rounded-xl border border-[#E2D9CC]">
-                        {formData.controlarStock ? (
-                          <span className="text-[#1E5E3A] font-semibold flex items-center gap-1">
-                            ✓ Se descontará del stock con cada venta o pedido registrado.
-                          </span>
-                        ) : (
-                          <span>
-                            Sin control estricto: el juego se ofrece como disponible a pedido.
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Bloque Oferta */}
-                  <div className="col-span-2 p-3.5 bg-white border border-[#E2D9CC] rounded-2xl space-y-3 shadow-sm">
-                    <div className="flex items-center justify-between pb-2 border-b border-[#E2D9CC]/50">
-                      <Label className="text-xs font-bold text-[#241C15] uppercase tracking-wider flex items-center gap-1.5">
-                        🏷️ Configurar Oferta
-                      </Label>
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={formData.enOferta}
-                          onChange={(e) => setFormData(prev => ({ ...prev, enOferta: e.target.checked }))}
-                          className="rounded border-[#E2D9CC] text-[#A36F4C] focus:ring-[#A36F4C]"
-                        />
-                        <span className="text-[10px] text-[#75695D] font-bold">Activar Oferta</span>
-                      </label>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-[10px] font-bold text-[#75695D]">Descuento (%)</Label>
-                        <div className="relative">
-                          <Input
-                            type="number"
-                            value={formData.porcentajeDescuento}
-                            onChange={(e) => handleDescuentoChange(e.target.value)}
-                            placeholder="Ej: 15"
-                            disabled={!formData.enOferta}
-                            className="bg-[#F8F6F2] border-[#E2D9CC] rounded-xl text-xs h-9 pr-6 disabled:opacity-50"
-                          />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-[#A36F4C] font-bold">%</span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label className="text-[10px] font-bold text-[#75695D]">Nuevo Precio (S/)</Label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-[#A36F4C] font-bold">S/</span>
-                          <Input
-                            type="number"
-                            step="0.5"
-                            value={formData.precioOferta}
-                            onChange={(e) => handlePrecioOfertaChange(e.target.value)}
-                            placeholder="0.00"
-                            disabled={!formData.enOferta}
-                            className="bg-[#F8F6F2] border-[#E2D9CC] rounded-xl text-xs h-9 pl-7 disabled:opacity-50 font-bold text-[#DC2626]"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Multimedia y Destacado */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-[11px] font-bold text-[#75695D]">URL de Imagen Principal</Label>
-                    <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.destacadoWeb}
-                        onChange={(e) => setFormData(prev => ({ ...prev, destacadoWeb: e.target.checked }))}
-                        className="rounded border-[#E2D9CC] text-[#A36F4C] focus:ring-[#A36F4C]"
-                      />
-                      <span className="text-[10px] font-bold text-[#A36F4C]">Destacar en Inicio</span>
-                    </label>
-                  </div>
-                  <Input
-                    type="url"
-                    value={formData.imagenUrl}
-                    onChange={(e) => setFormData(prev => ({ ...prev, imagenUrl: e.target.value }))}
-                    placeholder="https://ejemplo.com/imagen.jpg"
-                    className="bg-[#F8F6F2] border-[#E2D9CC] rounded-xl text-xs h-9"
-                  />
-                </div>
-
-                {/* Descripción */}
-                <div className="space-y-2">
-                  <Label className="text-[11px] font-bold text-[#75695D]">Descripción para la Web</Label>
-                  <textarea
-                    value={formData.descripcionWeb}
-                    onChange={(e) => setFormData(prev => ({ ...prev, descripcionWeb: e.target.value }))}
-                    placeholder="Describe el producto para los clientes..."
-                    className="w-full bg-[#F8F6F2] border border-[#E2D9CC] rounded-xl text-xs p-2.5 min-h-[60px] focus:outline-none focus:ring-1 focus:ring-[#A36F4C] resize-none"
-                  />
-                </div>
-              </div>
-
-              {/* Ficha Técnica BG (solo visible en modo Juegos de Mesa) */}
-              {isBG && (
-                <div className="p-3.5 bg-white border border-[#E2D9CC] rounded-2xl space-y-3 shadow-sm">
-                  <div className="flex items-center gap-1.5 pb-2 border-b border-[#E2D9CC]/50">
-                    <span className="text-xs font-bold text-[#241C15] uppercase tracking-wider">
-                      🎲 Ficha Técnica del Juego
-                    </span>
-                    <span className="text-[10px] text-[#75695D] ml-auto">Tabla de características en la web</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-[11px] font-bold text-[#75695D]">Número de Jugadores</Label>
-                      <Input
-                        value={formData.numJugadores}
-                        onChange={(e) => setFormData(prev => ({ ...prev, numJugadores: e.target.value }))}
-                        placeholder="Ej: 2-4"
-                        className="bg-[#F8F6F2] border-[#E2D9CC] rounded-xl text-xs h-9"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-[11px] font-bold text-[#75695D]">Edad Mínima (años)</Label>
-                      <Input
-                        type="number"
-                        value={formData.edadMinima}
-                        onChange={(e) => setFormData(prev => ({ ...prev, edadMinima: e.target.value }))}
-                        placeholder="Ej: 8"
-                        className="bg-[#F8F6F2] border-[#E2D9CC] rounded-xl text-xs h-9"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-[11px] font-bold text-[#75695D]">Duración (minutos)</Label>
-                      <Input
-                        type="number"
-                        value={formData.duracionMinutos}
-                        onChange={(e) => setFormData(prev => ({ ...prev, duracionMinutos: e.target.value }))}
-                        placeholder="Ej: 45"
-                        className="bg-[#F8F6F2] border-[#E2D9CC] rounded-xl text-xs h-9"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-[11px] font-bold text-[#75695D]">Editorial / Marca</Label>
-                      <Input
-                        value={formData.editorialMarca}
-                        onChange={(e) => setFormData(prev => ({ ...prev, editorialMarca: e.target.value }))}
-                        placeholder="Ej: Devir"
-                        className="bg-[#F8F6F2] border-[#E2D9CC] rounded-xl text-xs h-9"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-[11px] font-bold text-[#75695D]">Idioma</Label>
-                      <Input
-                        value={formData.idioma}
-                        onChange={(e) => setFormData(prev => ({ ...prev, idioma: e.target.value }))}
-                        placeholder="Ej: Español"
-                        className="bg-[#F8F6F2] border-[#E2D9CC] rounded-xl text-xs h-9"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-[11px] font-bold text-[#75695D]">Mecánicas</Label>
-                      <Input
-                        value={formData.mecanicas}
-                        onChange={(e) => setFormData(prev => ({ ...prev, mecanicas: e.target.value }))}
-                        placeholder="Ej: Deducción, Velocidad"
-                        className="bg-[#F8F6F2] border-[#E2D9CC] rounded-xl text-xs h-9"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-            </div>
-
-            {/* Footer */}
-            <div className="flex justify-end gap-2 pt-4 mt-2 border-t border-[#E2D9CC]/50">
-              {editingId && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    const p = productos.find(x => x.id === editingId)
-                    if (p) handleDelete(p)
-                  }}
-                  className="bg-white border-[#DC2626] text-[#DC2626] hover:bg-red-50 text-xs rounded-xl cursor-pointer mr-auto"
-                >
-                  <Trash2 className="h-3.5 w-3.5 mr-1" />
-                  Eliminar
-                </Button>
-              )}
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setOpenModal(false)}
-                className="text-xs rounded-xl cursor-pointer text-[#75695D]"
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                size="sm"
-                className="bg-[#A36F4C] hover:bg-[#8E5E3E] text-white font-bold text-xs px-5 rounded-xl cursor-pointer shadow-xs"
-              >
-                {isSubmitting ? 'Guardando...' : 'Guardar Producto'}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <ProductDetailsModal
+        isOpen={isDetailsOpen}
+        onClose={() => setIsDetailsOpen(false)}
+        group={selectedGroup}
+        singleProduct={selectedSingleProduct}
+        onEdit={() => {
+          setIsDetailsOpen(false)
+          if (selectedGroup && selectedGroup.variants.length > 0) {
+            handleOpenEdit(selectedGroup.variants[0].producto)
+          } else if (selectedSingleProduct) {
+            handleOpenEdit(selectedSingleProduct)
+          }
+        }}
+        formatCurrency={formatCurrency}
+        calcMargen={calcMargen}
+      />
     </div>
   )
 }
