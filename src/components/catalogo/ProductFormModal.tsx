@@ -36,7 +36,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import { XMLParser } from 'fast-xml-parser'
+import { fetchBggProductDetails } from '@/actions/bgg'
 import { createProducto, updateProducto } from '@/actions/productos'
 import { extractBaseAndVariant } from './ProductsTableView'
 import type { ProductoItem } from './CatalogoClient'
@@ -303,94 +303,32 @@ export function ProductFormModal({
     toast.info(`Consultando juego #${idVal} en BGG...`)
 
     try {
-      const token = 'f7ad4bda-0a75-4d1c-9ee0-bb8417ea409f'
-      const url = `https://boardgamegeek.com/xmlapi2/thing?id=${idVal}&stats=1`
-      const res = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'User-Agent': 'BGG-Personal-Collection-Tracker/1.0',
-          Accept: 'application/xml,text/xml,*/*',
-        },
-      })
-
-      if (!res.ok) throw new Error(`BGG respondió con código ${res.status}`)
-
-      const xmlText = await res.text()
-      const parser = new XMLParser({
-        ignoreAttributes: false,
-        attributeNamePrefix: '@_',
-      })
-      const result = parser.parse(xmlText)
-      const rawItem = result.items?.item
-      const item = Array.isArray(rawItem) ? rawItem[0] : rawItem
-
-      if (!item) {
-        toast.warning('No se encontró información en BoardGameGeek para ese ID')
+      const res = await fetchBggProductDetails(idVal)
+      if (!res.success || !res.data) {
+        toast.warning(res.error || 'No se encontró información en BoardGameGeek para ese ID')
         return
       }
 
-      // Nombre primario
-      let gameName = ''
-      const names = Array.isArray(item.name) ? item.name : [item.name]
-      const primaryName = names.find((n: any) => n?.['@_type'] === 'primary')?.['@_value']
-      if (primaryName) gameName = primaryName
+      const item = res.data
 
-      // Stats
-      const rating = parseFloat(item.statistics?.ratings?.average?.['@_value']) || null
-      const minPlayers = parseInt(item.minplayers?.['@_value'], 10) || null
-      const maxPlayers = parseInt(item.maxplayers?.['@_value'], 10) || null
-      const playtime = parseInt(item.playingtime?.['@_value'], 10) || null
-      const minAge = parseInt(item.minage?.['@_value'], 10) || null
-
-      let numJugadores = ''
-      if (minPlayers && maxPlayers) {
-        numJugadores = minPlayers === maxPlayers ? `${minPlayers} jugadores` : `${minPlayers} - ${maxPlayers} jugadores`
-      } else if (minPlayers) {
-        numJugadores = `${minPlayers}+ jugadores`
-      }
-
-      const links = Array.isArray(item.link) ? item.link : item.link ? [item.link] : []
-      const publishers = links
-        .filter((l: any) => l?.['@_type'] === 'boardgamepublisher')
-        .map((l: any) => l?.['@_value'])
-        .filter(Boolean)
-      const editorialMarca = publishers[0] || ''
-
-      const mechanics = links
-        .filter((l: any) => l?.['@_type'] === 'boardgamemechanic')
-        .map((l: any) => l?.['@_value'])
-        .filter(Boolean)
-      const mecanicas = mechanics.slice(0, 4).join(', ')
-
-      let imagenUrl = ''
-      if (typeof item.image === 'string' && item.image.startsWith('http')) {
-        imagenUrl = item.image
-      }
-
-      // Sinopsis o descripción
-      let desc = ''
-      if (typeof item.description === 'string') {
-        desc = item.description.replace(/&#10;/g, '\n').replace(/&quot;/g, '"').replace(/&amp;/g, '&').slice(0, 500)
-      }
-
-      if (!gameBaseName.trim() && gameName) {
-        setGameBaseName(gameName)
+      if (!gameBaseName.trim() && item.gameName) {
+        setGameBaseName(item.gameName)
       }
 
       setFormData((prev) => ({
         ...prev,
-        bggId: idVal,
-        imagenUrl: imagenUrl || prev.imagenUrl,
-        numJugadores: numJugadores || prev.numJugadores,
-        duracionMinutos: playtime ? String(playtime) : prev.duracionMinutos,
-        edadMinima: minAge ? String(minAge) : prev.edadMinima,
-        editorialMarca: editorialMarca || prev.editorialMarca,
-        mecanicas: mecanicas || prev.mecanicas,
-        descripcionWeb: desc || prev.descripcionWeb,
-        bggRating: rating ? parseFloat(rating.toFixed(2)) : prev.bggRating,
+        bggId: String(item.bggId),
+        imagenUrl: item.imagenUrl || prev.imagenUrl,
+        numJugadores: item.numJugadores || prev.numJugadores,
+        duracionMinutos: item.duracionMinutos ? String(item.duracionMinutos) : prev.duracionMinutos,
+        edadMinima: item.edadMinima ? String(item.edadMinima) : prev.edadMinima,
+        editorialMarca: item.editorialMarca || prev.editorialMarca,
+        mecanicas: item.mecanicas || prev.mecanicas,
+        descripcionWeb: item.descripcionWeb || prev.descripcionWeb,
+        bggRating: item.bggRating !== null && item.bggRating !== undefined ? item.bggRating : prev.bggRating,
       }))
 
-      toast.success(`¡Ficha de "${gameName || idVal}" sincronizada desde BGG!`)
+      toast.success(`¡Ficha de "${item.gameName || idVal}" sincronizada desde BGG!`)
     } catch (err: any) {
       console.error('Error al consultar BGG:', err)
       toast.error('Error al conectar con BGG: ' + (err.message || 'Verifica la conexión'))

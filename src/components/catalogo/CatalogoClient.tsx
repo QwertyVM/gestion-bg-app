@@ -48,8 +48,7 @@ import {
   deleteModeloConVariantes,
   duplicarModeloConVariantes
 } from '@/actions/productos'
-import { bulkUpdateBggStats, BggStatUpdateItem } from '@/actions/bgg'
-import { XMLParser } from 'fast-xml-parser'
+import { syncBggProducts } from '@/actions/bgg'
 
 import { 
   ProductsTableView, 
@@ -441,100 +440,19 @@ export function CatalogoClient({
     }
 
     setIsSyncingBgg(true)
-    toast.info(`Consultando ${gamesWithBgg.length} juegos en BGG en 1 sola llamada...`)
-
-    const token = 'f7ad4bda-0a75-4d1c-9ee0-bb8417ea409f'
-    const bggIdMap = new Map<number, (typeof gamesWithBgg)[0]>()
-    gamesWithBgg.forEach((p) => {
-      bggIdMap.set(Number(p.bggId), p)
-    })
-
-    const idsParam = Array.from(bggIdMap.keys()).join(',')
-    const url = `https://boardgamegeek.com/xmlapi2/thing?id=${idsParam}&stats=1`
+    toast.info(`Consultando ${gamesWithBgg.length} juegos en BGG...`)
 
     try {
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'User-Agent': 'BGG-Personal-Collection-Tracker/1.0',
-          Accept: 'application/xml,text/xml,*/*',
-        },
-      })
+      const targets = gamesWithBgg.map((p) => ({ id: p.id, bggId: Number(p.bggId) }))
+      const result = await syncBggProducts(targets)
 
-      if (!response.ok) {
-        throw new Error(`Error BGG API (${response.status}): ${response.statusText}`)
+      if (!result.success) {
+        throw new Error(result.error || 'Error al sincronizar con BGG')
       }
 
-      const xmlText = await response.text()
-      const parser = new XMLParser({
-        ignoreAttributes: false,
-        attributeNamePrefix: '@_',
-      })
-      const result = parser.parse(xmlText)
-      const rawItems = result.items?.item
-      const items = Array.isArray(rawItems) ? rawItems : rawItems ? [rawItems] : []
-
-      const updates: BggStatUpdateItem[] = []
-
-      for (const item of items) {
-        const id = parseInt(item['@_id'], 10)
-        if (!id) continue
-        const prod = bggIdMap.get(id)
-        if (!prod) continue
-
-        const rating = parseFloat(item.statistics?.ratings?.average?.['@_value']) || undefined
-        const weight = parseFloat(item.statistics?.ratings?.averageweight?.['@_value']) || undefined
-        const ratingCount = parseInt(item.statistics?.ratings?.usersrated?.['@_value'], 10) || undefined
-        const minPlayers = parseInt(item.minplayers?.['@_value'], 10) || undefined
-        const maxPlayers = parseInt(item.maxplayers?.['@_value'], 10) || undefined
-        const playtime = parseInt(item.playingtime?.['@_value'], 10) || undefined
-        const minAgeVal = parseInt(item.minage?.['@_value'], 10) || undefined
-
-        let numJugadores: string | undefined = undefined
-        if (minPlayers && maxPlayers) {
-          numJugadores = minPlayers === maxPlayers ? `${minPlayers} jugadores` : `${minPlayers} - ${maxPlayers} jugadores`
-        } else if (minPlayers) {
-          numJugadores = `${minPlayers}+ jugadores`
-        }
-
-        const links = Array.isArray(item.link) ? item.link : item.link ? [item.link] : []
-        const publishers: string[] = links
-          .filter((l: any) => l?.['@_type'] === 'boardgamepublisher')
-          .map((l: any) => l?.['@_value'])
-          .filter(Boolean)
-        const editorialMarca = publishers[0] || undefined
-
-        const mechanics: string[] = links
-          .filter((l: any) => l?.['@_type'] === 'boardgamemechanic')
-          .map((l: any) => l?.['@_value'])
-          .filter(Boolean)
-        const mecanicas = mechanics.slice(0, 4).join(', ')
-
-        let imagenUrl: string | undefined = undefined
-        if (typeof item.image === 'string' && item.image.startsWith('http')) {
-          imagenUrl = item.image
-        }
-
-        updates.push({
-          id: prod.id,
-          bggRating: rating ? parseFloat(rating.toFixed(2)) : null,
-          bggWeight: weight ? parseFloat(weight.toFixed(2)) : null,
-          bggMinPlayers: minPlayers || null,
-          bggMaxPlayers: maxPlayers || null,
-          bggPlaytime: playtime || null,
-          bggRatingCount: ratingCount || null,
-          numJugadores: numJugadores || null,
-          edadMinima: minAgeVal && minAgeVal > 0 ? minAgeVal : null,
-          duracionMinutos: playtime && playtime > 0 ? playtime : null,
-          editorialMarca: editorialMarca || null,
-          mecanicas: mecanicas || null,
-          idioma: 'Español',
-          imagenUrl: imagenUrl || null,
-        })
-      }
+      const updates = result.updates || []
 
       if (updates.length > 0) {
-        await bulkUpdateBggStats(updates)
         const updateMap = new Map(updates.map((u) => [u.id, u]))
         setProductos((prev) =>
           prev.map((p) => {
@@ -554,7 +472,7 @@ export function CatalogoClient({
             }
           })
         )
-        toast.success(`¡Éxito! ${updates.length} juegos actualizados en 1 sola llamada a BGG.`)
+        toast.success(`¡Éxito! ${updates.length} juegos actualizados desde BGG.`)
         router.refresh()
       } else {
         toast.warning('No se encontraron estadísticas para los IDs consultados en BGG.')
