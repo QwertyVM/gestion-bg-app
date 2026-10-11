@@ -161,6 +161,7 @@ export function CatalogoClient({
   // Modales
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<ProductoItem | null>(null)
+  const [initialFormValues, setInitialFormValues] = useState<Partial<ProductoItem> | null>(null)
   const [isDetailsOpen, setIsDetailsOpen] = useState(false)
   const [selectedGroup, setSelectedGroup] = useState<ProductGroupRow | null>(null)
   const [selectedSingleProduct, setSelectedSingleProduct] = useState<ProductoItem | null>(null)
@@ -168,19 +169,45 @@ export function CatalogoClient({
   // Handlers para abrir modales
   const handleOpenCreate = () => {
     setEditingProduct(null)
+    setInitialFormValues(null)
     setIsFormOpen(true)
   }
 
   const handleOpenEdit = (p: ProductoItem) => {
     setEditingProduct(p)
+    setInitialFormValues(null)
     setIsFormOpen(true)
   }
 
   const handleOpenEditGroup = (group: ProductGroupRow) => {
     if (group.variants.length > 0) {
       setEditingProduct(group.variants[0].producto)
+      setInitialFormValues(null)
       setIsFormOpen(true)
     }
+  }
+
+  const handleOpenAddEdition = (baseProduct: ProductoItem, baseName: string) => {
+    setEditingProduct(null)
+    setInitialFormValues({
+      nombreModelo: baseName,
+      lineaCategoria: baseProduct.lineaCategoria,
+      editorialMarca: baseProduct.editorialMarca,
+      idioma: baseProduct.idioma,
+      numJugadores: baseProduct.numJugadores,
+      duracionMinutos: baseProduct.duracionMinutos,
+      edadMinima: baseProduct.edadMinima,
+      mecanicas: baseProduct.mecanicas,
+      bggId: baseProduct.bggId,
+      bggRating: baseProduct.bggRating,
+      costoBase: baseProduct.costoBase,
+      precioMercado: baseProduct.precioMercado,
+      precioAmigos: baseProduct.precioAmigos,
+      imagenUrl: baseProduct.imagenUrl,
+      descripcionWeb: baseProduct.descripcionWeb,
+    })
+    setIsDetailsOpen(false)
+    setIsFormOpen(true)
   }
 
   const handleOpenDetail = (group?: ProductGroupRow, single?: ProductoItem) => {
@@ -946,9 +973,13 @@ export function CatalogoClient({
       {/* ========================================================================= */}
       <ProductFormModal
         isOpen={isFormOpen}
-        onClose={() => setIsFormOpen(false)}
+        onClose={() => {
+          setIsFormOpen(false)
+          setInitialFormValues(null)
+        }}
         onSaved={handleProductSaved}
         editingProduct={editingProduct}
+        initialValues={initialFormValues}
         categoryNamesList={categoryNamesList}
       />
 
@@ -957,14 +988,17 @@ export function CatalogoClient({
         onClose={() => setIsDetailsOpen(false)}
         group={selectedGroup}
         singleProduct={selectedSingleProduct}
-        onEdit={() => {
+        onEdit={(prodToEdit?: ProductoItem) => {
           setIsDetailsOpen(false)
-          if (selectedGroup && selectedGroup.variants.length > 0) {
+          if (prodToEdit) {
+            handleOpenEdit(prodToEdit)
+          } else if (selectedGroup && selectedGroup.variants.length > 0) {
             handleOpenEdit(selectedGroup.variants[0].producto)
           } else if (selectedSingleProduct) {
             handleOpenEdit(selectedSingleProduct)
           }
         }}
+        onAddEdition={handleOpenAddEdition}
         formatCurrency={formatCurrency}
         calcMargen={calcMargen}
       />

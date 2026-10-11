@@ -5,7 +5,6 @@ import {
   X,
   Package,
   Sparkles,
-  Link as LinkIcon,
   Loader2,
   ExternalLink,
   Tag,
@@ -15,7 +14,15 @@ import {
   Star,
   Users,
   Clock,
-  Check
+  Check,
+  Layers,
+  ArrowRight,
+  ArrowLeft,
+  Building2,
+  Globe,
+  Warehouse,
+  Percent,
+  Trash2
 } from 'lucide-react'
 import {
   Dialog,
@@ -27,9 +34,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { XMLParser } from 'fast-xml-parser'
 import { createProducto, updateProducto } from '@/actions/productos'
+import { extractBaseAndVariant } from './ProductsTableView'
 import type { ProductoItem } from './CatalogoClient'
 
 export interface ProductFormModalProps {
@@ -37,22 +46,52 @@ export interface ProductFormModalProps {
   onClose: () => void
   onSaved: (savedProduct: ProductoItem) => void
   editingProduct?: ProductoItem | null
+  initialValues?: Partial<ProductoItem> | null
   categoryNamesList: string[]
 }
+
+const COMMON_EDITIONS = [
+  'Juego Base',
+  'Edición Deluxe',
+  'Expansión',
+  '2da Edición',
+  'Edición Aniversario',
+  'Edición Especial',
+  'Versión Compacta'
+]
+
+const COMMON_MECHANICS = [
+  'Gestión de Mano',
+  'Colocación de Losetas',
+  'Drafting',
+  'Cooperativo',
+  'Deducción',
+  'Construcción de Mazos',
+  'Colocación de Trabajadores',
+  'Control de Área',
+  'Push Your Luck',
+  'Subastas / Comercio'
+]
+
+const COMMON_LANGUAGES = ['Español', 'Inglés', 'Independiente del idioma', 'Multilenguaje']
 
 export function ProductFormModal({
   isOpen,
   onClose,
   onSaved,
   editingProduct,
+  initialValues,
   categoryNamesList
 }: ProductFormModalProps) {
   const [activeTab, setActiveTab] = useState<'general' | 'precios' | 'bgg'>('general')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isFetchingBgg, setIsFetchingBgg] = useState(false)
 
+  // Separación de nombre base y variante de edición
+  const [gameBaseName, setGameBaseName] = useState('')
+  const [editionName, setEditionName] = useState('')
+
   const [formData, setFormData] = useState({
-    nombreModelo: '',
     lineaCategoria: '',
     costoBase: '0',
     precioMercado: '0',
@@ -77,11 +116,16 @@ export function ProductFormModal({
     bggRating: null as number | null
   })
 
-  // Sincronizar datos al abrir o cambiar editingProduct
+  // Sincronizar datos al abrir o cambiar de producto / valores iniciales
   useEffect(() => {
+    if (!isOpen) return
+
     if (editingProduct) {
+      const { baseName, variantName } = extractBaseAndVariant(editingProduct.nombreModelo)
+      setGameBaseName(baseName)
+      setEditionName(variantName === 'Estándar' ? '' : variantName)
+
       setFormData({
-        nombreModelo: editingProduct.nombreModelo || '',
         lineaCategoria: editingProduct.lineaCategoria || categoryNamesList[0] || 'General',
         costoBase: editingProduct.costoBase != null ? String(editingProduct.costoBase) : '0',
         precioMercado: editingProduct.precioMercado != null ? String(editingProduct.precioMercado) : '0',
@@ -105,9 +149,39 @@ export function ProductFormModal({
         bggId: editingProduct.bggId != null ? String(editingProduct.bggId) : '',
         bggRating: editingProduct.bggRating ? Number(editingProduct.bggRating) : null
       })
-    } else {
+    } else if (initialValues) {
+      const { baseName } = extractBaseAndVariant(initialValues.nombreModelo || '')
+      setGameBaseName(baseName || initialValues.nombreModelo || '')
+      setEditionName('')
+
       setFormData({
-        nombreModelo: '',
+        lineaCategoria: initialValues.lineaCategoria || categoryNamesList[0] || 'General',
+        costoBase: initialValues.costoBase != null ? String(initialValues.costoBase) : '0',
+        precioMercado: initialValues.precioMercado != null ? String(initialValues.precioMercado) : '0',
+        precioAmigos: initialValues.precioAmigos != null ? String(initialValues.precioAmigos) : '0',
+        precioComunidad: initialValues.precioComunidad != null ? String(initialValues.precioComunidad) : '0',
+        activo: initialValues.activo ?? true,
+        stock: initialValues.stock != null ? String(initialValues.stock) : '0',
+        controlarStock: initialValues.controlarStock ?? false,
+        enOferta: initialValues.enOferta ?? false,
+        precioOferta: initialValues.precioOferta != null ? String(initialValues.precioOferta) : '',
+        porcentajeDescuento: initialValues.porcentajeDescuento != null ? String(initialValues.porcentajeDescuento) : '',
+        imagenUrl: initialValues.imagenUrl || '',
+        descripcionWeb: initialValues.descripcionWeb || '',
+        destacadoWeb: initialValues.destacadoWeb ?? false,
+        numJugadores: initialValues.numJugadores || '',
+        edadMinima: initialValues.edadMinima != null ? String(initialValues.edadMinima) : '',
+        duracionMinutos: initialValues.duracionMinutos != null ? String(initialValues.duracionMinutos) : '',
+        idioma: initialValues.idioma || 'Español',
+        editorialMarca: initialValues.editorialMarca || '',
+        mecanicas: initialValues.mecanicas || '',
+        bggId: initialValues.bggId != null ? String(initialValues.bggId) : '',
+        bggRating: initialValues.bggRating ? Number(initialValues.bggRating) : null
+      })
+    } else {
+      setGameBaseName('')
+      setEditionName('')
+      setFormData({
         lineaCategoria: categoryNamesList[0] || 'General',
         costoBase: '0',
         precioMercado: '0',
@@ -133,9 +207,18 @@ export function ProductFormModal({
       })
     }
     setActiveTab('general')
-  }, [editingProduct, categoryNamesList, isOpen])
+  }, [editingProduct, initialValues, categoryNamesList, isOpen])
 
-  // Margen reactivo helper
+  // Nombre resultante en el catálogo
+  const computedFullProductName = React.useMemo(() => {
+    const base = gameBaseName.trim()
+    const edition = editionName.trim()
+    if (!base) return ''
+    if (!edition || edition.toLowerCase() === 'estándar') return base
+    return `${base} - ${edition}`
+  }, [gameBaseName, editionName])
+
+  // Helpers de margen
   const calcMargen = (precioStr: string, costoStr: string) => {
     const p = parseFloat(precioStr) || 0
     const c = parseFloat(costoStr) || 0
@@ -144,18 +227,30 @@ export function ProductFormModal({
     return m >= 0 ? `+${m.toFixed(0)}%` : `${m.toFixed(0)}%`
   }
 
+  const calcGanancia = (precioStr: string, costoStr: string) => {
+    const p = parseFloat(precioStr) || 0
+    const c = parseFloat(costoStr) || 0
+    return Math.max(0, p - c)
+  }
+
   // Descuento reactivo
   const handleDescuentoChange = (val: string) => {
     const pMercado = parseFloat(formData.precioMercado) || 0
     const costoBase = parseFloat(formData.costoBase) || 0
-    let descuento = parseFloat(val) || 0
-    if (descuento < 0) descuento = 0
-    if (descuento > 100) descuento = 100
+    const descuento = Math.min(100, Math.max(0, parseInt(val) || 0))
 
-    let nuevoPrecio = pMercado - (pMercado * descuento) / 100
+    if (pMercado <= 0 || descuento <= 0) {
+      setFormData((prev) => ({
+        ...prev,
+        porcentajeDescuento: val,
+        precioOferta: '',
+      }))
+      return
+    }
+
+    let nuevoPrecio = pMercado * (1 - descuento / 100)
     if (nuevoPrecio < costoBase && costoBase > 0) {
       nuevoPrecio = costoBase
-      descuento = Math.round(((pMercado - nuevoPrecio) / pMercado) * 100)
     }
 
     setFormData((prev) => ({
@@ -187,11 +282,20 @@ export function ProductFormModal({
     }))
   }
 
-  // Consultar BoardGameGeek automáticamente para un ID
+  // Consultar BoardGameGeek automáticamente (soporta número o URL completa)
   const handleFetchBgg = async () => {
-    const idVal = formData.bggId.trim()
+    let rawInput = formData.bggId.trim()
+    if (!rawInput) {
+      toast.warning('Ingresa un ID numérico o enlace URL de BoardGameGeek')
+      return
+    }
+
+    // Extraer ID si el usuario ingresó una URL completa
+    const urlMatch = rawInput.match(/boardgame(?:geek\.com\/boardgame)?\/(\d+)/i)
+    const idVal = urlMatch ? urlMatch[1] : rawInput
+
     if (!idVal || isNaN(Number(idVal))) {
-      toast.warning('Ingresa un ID numérico de BoardGameGeek válido')
+      toast.warning('Ingresa un ID numérico o enlace válido de BoardGameGeek (ej. 13 o https://boardgamegeek.com/boardgame/13/catan)')
       return
     }
 
@@ -209,7 +313,7 @@ export function ProductFormModal({
         },
       })
 
-      if (!res.ok) throw new Error(`BGG respondió con error ${res.status}`)
+      if (!res.ok) throw new Error(`BGG respondió con código ${res.status}`)
 
       const xmlText = await res.text()
       const parser = new XMLParser({
@@ -221,17 +325,17 @@ export function ProductFormModal({
       const item = Array.isArray(rawItem) ? rawItem[0] : rawItem
 
       if (!item) {
-        toast.warning('No se encontró información en BGG para ese ID')
+        toast.warning('No se encontró información en BoardGameGeek para ese ID')
         return
       }
 
-      // Nombre si no tiene
+      // Nombre primario
       let gameName = ''
       const names = Array.isArray(item.name) ? item.name : [item.name]
       const primaryName = names.find((n: any) => n?.['@_type'] === 'primary')?.['@_value']
       if (primaryName) gameName = primaryName
 
-      // Rating
+      // Stats
       const rating = parseFloat(item.statistics?.ratings?.average?.['@_value']) || null
       const minPlayers = parseInt(item.minplayers?.['@_value'], 10) || null
       const maxPlayers = parseInt(item.maxplayers?.['@_value'], 10) || null
@@ -263,19 +367,30 @@ export function ProductFormModal({
         imagenUrl = item.image
       }
 
+      // Sinopsis o descripción
+      let desc = ''
+      if (typeof item.description === 'string') {
+        desc = item.description.replace(/&#10;/g, '\n').replace(/&quot;/g, '"').replace(/&amp;/g, '&').slice(0, 500)
+      }
+
+      if (!gameBaseName.trim() && gameName) {
+        setGameBaseName(gameName)
+      }
+
       setFormData((prev) => ({
         ...prev,
-        nombreModelo: prev.nombreModelo.trim() ? prev.nombreModelo : gameName,
+        bggId: idVal,
         imagenUrl: imagenUrl || prev.imagenUrl,
         numJugadores: numJugadores || prev.numJugadores,
         duracionMinutos: playtime ? String(playtime) : prev.duracionMinutos,
         edadMinima: minAge ? String(minAge) : prev.edadMinima,
         editorialMarca: editorialMarca || prev.editorialMarca,
         mecanicas: mecanicas || prev.mecanicas,
+        descripcionWeb: desc || prev.descripcionWeb,
         bggRating: rating ? parseFloat(rating.toFixed(2)) : prev.bggRating,
       }))
 
-      toast.success('¡Datos de BGG importados correctamente!')
+      toast.success(`¡Ficha de "${gameName || idVal}" sincronizada desde BGG!`)
     } catch (err: any) {
       console.error('Error al consultar BGG:', err)
       toast.error('Error al conectar con BGG: ' + (err.message || 'Verifica la conexión'))
@@ -288,12 +403,13 @@ export function ProductFormModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!formData.nombreModelo.trim()) {
+    if (!gameBaseName.trim()) {
       toast.error('El nombre del juego es obligatorio')
       setActiveTab('general')
       return
     }
 
+    const finalNombreModelo = computedFullProductName
     const costoBase = parseFloat(formData.costoBase) || 0
     const precioMercado = parseFloat(formData.precioMercado) || 0
     const precioAmigos = parseFloat(formData.precioAmigos) || 0
@@ -307,7 +423,7 @@ export function ProductFormModal({
     }
 
     const payload = {
-      nombreModelo: formData.nombreModelo.trim(),
+      nombreModelo: finalNombreModelo,
       lineaCategoria: formData.lineaCategoria.trim() || 'General',
       costoBase,
       precioMercado,
@@ -335,44 +451,72 @@ export function ProductFormModal({
     try {
       if (editingProduct) {
         const updated = await updateProducto(editingProduct.id, payload)
-        toast.success(`Juego "${payload.nombreModelo}" actualizado`)
+        toast.success(`Ficha "${payload.nombreModelo}" actualizada correctamente`)
         onSaved(updated)
       } else {
         const created = await createProducto(payload)
-        toast.success(`Juego "${payload.nombreModelo}" registrado con éxito`)
+        toast.success(`Ficha "${payload.nombreModelo}" registrada con éxito`)
         onSaved(created)
       }
       onClose()
     } catch (err: any) {
-      toast.error('Error al guardar producto: ' + err.message)
+      toast.error('Error al guardar: ' + (err.message || 'Error desconocido'))
     } finally {
       setIsSubmitting(false)
     }
   }
 
+  // Toggle de mecánica rápida
+  const handleToggleMechanic = (mec: string) => {
+    const current = formData.mecanicas
+      ? formData.mecanicas.split(',').map((m) => m.trim()).filter(Boolean)
+      : []
+
+    if (current.includes(mec)) {
+      const filtered = current.filter((m) => m !== mec)
+      setFormData({ ...formData, mecanicas: filtered.join(', ') })
+    } else {
+      current.push(mec)
+      setFormData({ ...formData, mecanicas: current.join(', ') })
+    }
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto p-0 rounded-2xl border-border bg-card shadow-2xl">
+      <DialogContent
+        showCloseButton={false}
+        className="max-w-2xl w-[95vw] sm:w-full max-h-[92vh] overflow-y-auto overflow-x-hidden p-0 rounded-2xl border-border bg-card shadow-2xl"
+      >
         <DialogTitle className="sr-only">
-          {editingProduct ? 'Editar Juego' : 'Nuevo Juego en Catálogo'}
+          {editingProduct ? 'Editar Ficha del Juego' : initialValues ? 'Nueva Edición del Juego' : 'Nuevo Juego en Catálogo'}
         </DialogTitle>
         <DialogDescription className="sr-only">
-          Formulario de registro y edición de catálogo para juegos de mesa
+          Formulario de configuración de juego de mesa y edición
         </DialogDescription>
 
-        <form onSubmit={handleSubmit} className="flex flex-col h-full">
-          {/* Header */}
-          <div className="p-5 border-b border-border flex items-center justify-between sticky top-0 bg-card z-10">
-            <div className="flex items-center gap-2.5">
+        <form onSubmit={handleSubmit} className="flex flex-col h-full w-full min-w-0 overflow-x-hidden">
+          {/* ========================================================================= */}
+          {/* HEADER DEL FORMULARIO                                                     */}
+          {/* ========================================================================= */}
+          <div className="p-4 sm:p-5 border-b border-border flex items-center justify-between sticky top-0 bg-card z-20">
+            <div className="flex items-center gap-3 min-w-0">
               <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
                 <Boxes className="h-5 w-5" />
               </div>
-              <div>
-                <h2 className="text-base sm:text-lg font-black text-foreground">
-                  {editingProduct ? 'Editar Ficha del Juego' : 'Nuevo Juego en Catálogo'}
+              <div className="min-w-0">
+                <h2 className="text-base sm:text-lg font-black text-foreground truncate">
+                  {editingProduct
+                    ? 'Editar Ficha y Edición'
+                    : initialValues
+                    ? 'Nueva Edición / Versión'
+                    : 'Nuevo Juego de Mesa'}
                 </h2>
-                <p className="text-xs text-muted-foreground">
-                  {editingProduct ? 'Modifica detalles, precios o ficha BGG' : 'Registra un nuevo juego de mesa'}
+                <p className="text-xs text-muted-foreground truncate">
+                  {computedFullProductName ? (
+                    <span className="font-semibold text-foreground/80">{computedFullProductName}</span>
+                  ) : (
+                    'Completa los datos del juego y su edición'
+                  )}
                 </p>
               </div>
             </div>
@@ -380,40 +524,47 @@ export function ProductFormModal({
             <button
               type="button"
               onClick={onClose}
-              className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary flex items-center justify-center transition-colors cursor-pointer"
+              className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary flex items-center justify-center transition-colors cursor-pointer shrink-0 ml-2"
+              title="Cerrar modal"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
 
-          {/* Navegación por pestañas */}
-          <div className="px-5 pt-3 border-b border-border bg-secondary/20 flex items-center gap-2 overflow-x-auto no-scrollbar">
+          {/* ========================================================================= */}
+          {/* BARRA DE PESTAÑAS (SEGMENTED TABS)                                        */}
+          {/* ========================================================================= */}
+          <div className="px-4 sm:px-5 pt-2 border-b border-border bg-secondary/20 flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0">
             <button
               type="button"
               onClick={() => setActiveTab('general')}
-              className={`px-3 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+              className={`px-3 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                 activeTab === 'general'
                   ? 'border-primary text-primary'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
-              1. Datos Generales
+              <Layers className="w-3.5 h-3.5" />
+              <span>1. General & Edición</span>
             </button>
+
             <button
               type="button"
               onClick={() => setActiveTab('precios')}
-              className={`px-3 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+              className={`px-3 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                 activeTab === 'precios'
                   ? 'border-primary text-primary'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
-              2. Precios & Inventario
+              <DollarSign className="w-3.5 h-3.5" />
+              <span>2. Precios & Stock</span>
             </button>
+
             <button
               type="button"
               onClick={() => setActiveTab('bgg')}
-              className={`px-3 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              className={`px-3 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                 activeTab === 'bgg'
                   ? 'border-primary text-primary'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -424,54 +575,169 @@ export function ProductFormModal({
             </button>
           </div>
 
-          {/* Contenido de la pestaña */}
-          <div className="p-5 space-y-4">
-            {/* TAB 1: DATOS GENERALES */}
+          {/* ========================================================================= */}
+          {/* CONTENIDO DEL FORMULARIO                                                  */}
+          {/* ========================================================================= */}
+          <div className="p-4 sm:p-5 space-y-5 flex-1 min-w-0 overflow-x-hidden">
+            {/* ========================================================================= */}
+            {/* TAB 1: DATOS GENERALES & EDICIÓN                                         */}
+            {/* ========================================================================= */}
             {activeTab === 'general' && (
-              <div className="space-y-4 animate-in fade-in-50 duration-150">
-                <div className="space-y-1.5">
-                  <Label htmlFor="nombreModelo" className="text-xs font-bold">
-                    Nombre del Juego <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="nombreModelo"
-                    value={formData.nombreModelo}
-                    onChange={(e) => setFormData({ ...formData, nombreModelo: e.target.value })}
-                    placeholder="Ej. Catan, Wingspan, Pandemic..."
-                    className="h-10 text-sm font-semibold rounded-xl"
-                    required
-                  />
+              <div className="space-y-4 animate-in fade-in-50 duration-150 min-w-0">
+                {/* BGG Quick Autocomplete Bar */}
+                <div className="p-3.5 bg-primary/5 rounded-xl border border-primary/20 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label htmlFor="quickBggInput" className="text-xs font-bold text-primary flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-primary" />
+                      <span>¿Tienes el ID o enlace de BoardGameGeek?</span>
+                    </Label>
+                    {formData.bggRating != null && (
+                      <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1 font-mono">
+                        <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                        <span>Rating: {formData.bggRating}</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Input
+                      id="quickBggInput"
+                      value={formData.bggId}
+                      onChange={(e) => setFormData({ ...formData, bggId: e.target.value })}
+                      placeholder="ID (ej. 13) o enlace https://boardgamegeek.com/boardgame/..."
+                      className="h-9 text-xs font-mono rounded-lg bg-card"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleFetchBgg}
+                      disabled={isFetchingBgg || !formData.bggId.trim()}
+                      className="gap-1.5 text-xs font-bold rounded-lg shrink-0 h-9 cursor-pointer"
+                    >
+                      {isFetchingBgg ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Consultando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>Autocompletar BGG</span>
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Importa automáticamente título, portada, editorial, jugadores, duración y mecánicas.
+                  </p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Campos de Nombre Base y Edición / Variante */}
+                <div className="bg-secondary/30 p-3.5 sm:p-4 rounded-xl border border-border space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Nombre Base del Juego */}
+                    <div className="space-y-1.5">
+                      <Label htmlFor="gameBaseName" className="text-xs font-bold">
+                        Nombre Base del Juego <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="gameBaseName"
+                        value={gameBaseName}
+                        onChange={(e) => setGameBaseName(e.target.value)}
+                        placeholder="Ej. Catan, Wingspan, El Gato de Schrödinger"
+                        className="h-10 text-sm font-bold rounded-lg bg-card"
+                        required
+                      />
+                    </div>
+
+                    {/* Edición / Versión */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="editionName" className="text-xs font-bold">
+                          Edición / Variante
+                        </Label>
+                        {editionName && (
+                          <button
+                            type="button"
+                            onClick={() => setEditionName('')}
+                            className="text-[10px] text-destructive hover:underline cursor-pointer"
+                          >
+                            Quitar edición
+                          </button>
+                        )}
+                      </div>
+                      <Input
+                        id="editionName"
+                        value={editionName}
+                        onChange={(e) => setEditionName(e.target.value)}
+                        placeholder="Ej. Juego Base, Edición Deluxe, Expansión..."
+                        className="h-10 text-xs font-medium rounded-lg bg-card"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Chips de Ediciones Comunes */}
+                  <div className="space-y-1.5 pt-1 border-t border-border/50">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
+                      Sugerencias de Edición:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {COMMON_EDITIONS.map((ed) => (
+                        <button
+                          key={ed}
+                          type="button"
+                          onClick={() => setEditionName(ed)}
+                          className={`text-[10px] px-2 py-0.5 rounded-md border transition-colors cursor-pointer ${
+                            editionName === ed
+                              ? 'bg-primary text-primary-foreground border-primary font-bold'
+                              : 'bg-card hover:bg-secondary text-muted-foreground hover:text-foreground border-border'
+                          }`}
+                        >
+                          {ed}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Preview del Nombre Completo resultante */}
+                  {computedFullProductName && (
+                    <div className="p-2.5 rounded-lg bg-card border border-border/80 flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground text-[11px]">Nombre final en catálogo:</span>
+                      <span className="font-bold text-foreground font-mono truncate">
+                        {computedFullProductName}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Categoría y Editorial */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
                   {/* Categoría */}
                   <div className="space-y-1.5">
                     <Label htmlFor="lineaCategoria" className="text-xs font-bold">
                       Categoría / Línea
                     </Label>
-                    <div className="space-y-1.5">
-                      <Input
-                        id="lineaCategoria"
-                        value={formData.lineaCategoria}
-                        onChange={(e) => setFormData({ ...formData, lineaCategoria: e.target.value })}
-                        placeholder="Ej. Estrategia, Familiar, Party Game..."
-                        className="h-10 text-xs rounded-xl"
-                      />
-                      {categoryNamesList.length > 0 && (
-                        <div className="flex flex-wrap gap-1 pt-1">
-                          {categoryNamesList.slice(0, 6).map((cat) => (
-                            <button
-                              key={cat}
-                              type="button"
-                              onClick={() => setFormData({ ...formData, lineaCategoria: cat })}
-                              className="text-[10px] bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground px-2 py-0.5 rounded-md border border-border transition-colors cursor-pointer"
-                            >
-                              {cat}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    <Input
+                      id="lineaCategoria"
+                      value={formData.lineaCategoria}
+                      onChange={(e) => setFormData({ ...formData, lineaCategoria: e.target.value })}
+                      placeholder="Ej. Estrategia, Familiar, Party Game..."
+                      className="h-9 text-xs rounded-lg"
+                    />
+                    {categoryNamesList.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {categoryNamesList.slice(0, 5).map((cat) => (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() => setFormData({ ...formData, lineaCategoria: cat })}
+                            className="text-[10px] bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground px-2 py-0.5 rounded-md border border-border transition-colors cursor-pointer"
+                          >
+                            {cat}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Editorial / Marca */}
@@ -484,15 +750,17 @@ export function ProductFormModal({
                       value={formData.editorialMarca}
                       onChange={(e) => setFormData({ ...formData, editorialMarca: e.target.value })}
                       placeholder="Ej. Devir, Asmodee, Stonemaier Games..."
-                      className="h-10 text-xs rounded-xl"
+                      className="h-9 text-xs rounded-lg"
                     />
                   </div>
                 </div>
 
-                {/* URL de Portada con Vista Previa */}
+                {/* Fotografía / Portada */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="imagenUrl" className="text-xs font-bold flex items-center justify-between">
-                    <span>URL de Fotografía / Portada</span>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="imagenUrl" className="text-xs font-bold">
+                      URL de Fotografía / Portada
+                    </Label>
                     {formData.imagenUrl && (
                       <button
                         type="button"
@@ -502,26 +770,33 @@ export function ProductFormModal({
                         Limpiar URL
                       </button>
                     )}
-                  </Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="imagenUrl"
-                      value={formData.imagenUrl}
-                      onChange={(e) => setFormData({ ...formData, imagenUrl: e.target.value })}
-                      placeholder="https://... (JPG, PNG o URL de BGG)"
-                      className="h-10 text-xs rounded-xl font-mono"
-                    />
                   </div>
+                  <Input
+                    id="imagenUrl"
+                    value={formData.imagenUrl}
+                    onChange={(e) => setFormData({ ...formData, imagenUrl: e.target.value })}
+                    placeholder="https://... (JPG, PNG o URL de BGG)"
+                    className="h-9 text-xs font-mono rounded-lg"
+                  />
+
                   {formData.imagenUrl && (
-                    <div className="mt-2 relative w-32 h-24 rounded-xl border border-border overflow-hidden bg-secondary">
-                      <img
-                        src={formData.imagenUrl}
-                        alt="Vista previa"
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = 'none'
-                        }}
-                      />
+                    <div className="mt-2 flex items-center gap-3 p-2 bg-secondary/30 rounded-xl border border-border">
+                      <div className="relative w-16 h-16 rounded-lg border border-border overflow-hidden bg-secondary shrink-0">
+                        <img
+                          src={formData.imagenUrl}
+                          alt="Vista previa"
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none'
+                          }}
+                        />
+                      </div>
+                      <div className="min-w-0 text-xs">
+                        <span className="font-bold text-foreground block">Vista previa de portada</span>
+                        <span className="text-[11px] text-muted-foreground truncate block">
+                          {formData.imagenUrl}
+                        </span>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -542,49 +817,57 @@ export function ProductFormModal({
               </div>
             )}
 
-            {/* TAB 2: PRECIOS & INVENTARIO */}
+            {/* ========================================================================= */}
+            {/* TAB 2: PRECIOS & INVENTARIO                                              */}
+            {/* ========================================================================= */}
             {activeTab === 'precios' && (
-              <div className="space-y-4 animate-in fade-in-50 duration-150">
+              <div className="space-y-4 animate-in fade-in-50 duration-150 min-w-0">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {/* Costo Base */}
-                  <div className="space-y-1.5">
-                    <Label htmlFor="costoBase" className="text-xs font-bold">
+                  <div className="space-y-1.5 bg-secondary/30 p-3 rounded-xl border border-border">
+                    <Label htmlFor="costoBase" className="text-xs font-bold block">
                       Costo Base (S/)
                     </Label>
                     <Input
                       id="costoBase"
                       type="number"
                       step="0.01"
+                      min="0"
                       value={formData.costoBase}
                       onChange={(e) => setFormData({ ...formData, costoBase: e.target.value })}
-                      className="h-10 text-sm font-mono font-semibold rounded-xl"
+                      className="h-10 text-sm font-mono font-bold rounded-lg bg-card"
                     />
+                    <span className="text-[10px] text-muted-foreground block">Costo de compra o importación</span>
                   </div>
 
-                  {/* Precio Mercado */}
-                  <div className="space-y-1.5">
+                  {/* Precio Mercado (PVP) */}
+                  <div className="space-y-1.5 bg-primary/5 p-3 rounded-xl border border-primary/25">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="precioMercado" className="text-xs font-bold text-primary">
+                      <Label htmlFor="precioMercado" className="text-xs font-bold text-primary block">
                         Precio Venta PVP (S/)
                       </Label>
-                      <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 font-mono">
+                      <Badge variant="outline" className="text-[10px] font-bold font-mono text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border-emerald-500/30 px-1 py-0">
                         {calcMargen(formData.precioMercado, formData.costoBase)}
-                      </span>
+                      </Badge>
                     </div>
                     <Input
                       id="precioMercado"
                       type="number"
                       step="0.01"
+                      min="0"
                       value={formData.precioMercado}
                       onChange={(e) => setFormData({ ...formData, precioMercado: e.target.value })}
-                      className="h-10 text-sm font-mono font-bold rounded-xl border-primary/30"
+                      className="h-10 text-sm font-mono font-black rounded-lg bg-card border-primary/40"
                     />
+                    <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono font-semibold block">
+                      Ganancia: +S/ {calcGanancia(formData.precioMercado, formData.costoBase).toFixed(2)}
+                    </span>
                   </div>
 
                   {/* Precio Amigos */}
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 bg-secondary/30 p-3 rounded-xl border border-border">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="precioAmigos" className="text-xs font-bold">
+                      <Label htmlFor="precioAmigos" className="text-xs font-bold block">
                         Precio Amigos (S/)
                       </Label>
                       <span className="text-[10px] font-bold text-muted-foreground font-mono">
@@ -595,10 +878,14 @@ export function ProductFormModal({
                       id="precioAmigos"
                       type="number"
                       step="0.01"
+                      min="0"
                       value={formData.precioAmigos}
                       onChange={(e) => setFormData({ ...formData, precioAmigos: e.target.value })}
-                      className="h-10 text-sm font-mono rounded-xl"
+                      className="h-10 text-sm font-mono font-bold rounded-lg bg-card"
                     />
+                    <span className="text-[10px] text-muted-foreground font-mono block">
+                      Ganancia: +S/ {calcGanancia(formData.precioAmigos, formData.costoBase).toFixed(2)}
+                    </span>
                   </div>
                 </div>
 
@@ -606,7 +893,10 @@ export function ProductFormModal({
                 <div className="p-4 bg-secondary/30 rounded-xl border border-border space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label className="text-xs font-bold block">Controlar Stock Físico</Label>
+                      <Label className="text-xs font-bold block flex items-center gap-1.5">
+                        <Warehouse className="w-3.5 h-3.5 text-primary" />
+                        <span>Controlar Stock Físico</span>
+                      </Label>
                       <span className="text-[11px] text-muted-foreground">
                         {formData.controlarStock
                           ? 'Control estricto de unidades en almacén'
@@ -620,17 +910,22 @@ export function ProductFormModal({
                   </div>
 
                   {formData.controlarStock && (
-                    <div className="pt-2 border-t border-border/60">
-                      <Label htmlFor="stock" className="text-xs font-bold">
-                        Unidades Disponibles
-                      </Label>
+                    <div className="pt-2 border-t border-border/60 flex items-center justify-between gap-3">
+                      <div>
+                        <Label htmlFor="stock" className="text-xs font-bold block">
+                          Unidades Disponibles en Almacén
+                        </Label>
+                        <span className="text-[10px] text-muted-foreground">
+                          {parseInt(formData.stock) > 2 ? 'En stock' : parseInt(formData.stock) > 0 ? 'Bajo stock' : 'Agotado'}
+                        </span>
+                      </div>
                       <Input
                         id="stock"
                         type="number"
                         min="0"
                         value={formData.stock}
                         onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
-                        className="h-10 w-32 text-sm font-mono font-bold rounded-xl mt-1"
+                        className="h-9 w-28 text-sm font-mono font-bold rounded-lg text-right bg-card"
                       />
                     </div>
                   )}
@@ -640,9 +935,12 @@ export function ProductFormModal({
                 <div className="p-4 bg-secondary/30 rounded-xl border border-border space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label className="text-xs font-bold block">Activar Oferta Especial</Label>
+                      <Label className="text-xs font-bold block flex items-center gap-1.5">
+                        <Tag className="w-3.5 h-3.5 text-rose-600" />
+                        <span>Activar Oferta Especial</span>
+                      </Label>
                       <span className="text-[11px] text-muted-foreground">
-                        Precio promocional con descuento visible
+                        Precio promocional con descuento visible en el catálogo
                       </span>
                     </div>
                     <Switch
@@ -652,23 +950,24 @@ export function ProductFormModal({
                   </div>
 
                   {formData.enOferta && (
-                    <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/60">
-                      <div>
+                    <div className="pt-2 border-t border-border/60 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
                         <Label htmlFor="porcentajeDescuento" className="text-xs font-bold">
-                          % Descuento
+                          % Descuento Promocional
                         </Label>
                         <Input
                           id="porcentajeDescuento"
                           type="number"
-                          min="0"
-                          max="100"
+                          min="1"
+                          max="90"
                           value={formData.porcentajeDescuento}
                           onChange={(e) => handleDescuentoChange(e.target.value)}
                           placeholder="Ej. 15"
-                          className="h-10 text-sm font-mono rounded-xl mt-1"
+                          className="h-9 text-xs font-mono rounded-lg bg-card"
                         />
                       </div>
-                      <div>
+
+                      <div className="space-y-1">
                         <Label htmlFor="precioOferta" className="text-xs font-bold text-rose-600">
                           Precio Oferta (S/)
                         </Label>
@@ -676,10 +975,11 @@ export function ProductFormModal({
                           id="precioOferta"
                           type="number"
                           step="0.01"
+                          min="0"
                           value={formData.precioOferta}
                           onChange={(e) => handlePrecioOfertaChange(e.target.value)}
-                          placeholder="Ej. 129.90"
-                          className="h-10 text-sm font-mono font-bold text-rose-600 rounded-xl mt-1 border-rose-300"
+                          placeholder="Ej. 119.00"
+                          className="h-9 text-xs font-mono font-bold rounded-lg bg-card border-rose-500/40"
                         />
                       </div>
                     </div>
@@ -688,54 +988,46 @@ export function ProductFormModal({
               </div>
             )}
 
-            {/* TAB 3: BGG & SPECS */}
+            {/* ========================================================================= */}
+            {/* TAB 3: SPECS & BOARDGAMEGEEK                                             */}
+            {/* ========================================================================= */}
             {activeTab === 'bgg' && (
-              <div className="space-y-4 animate-in fade-in-50 duration-150">
-                {/* Consultar BGG */}
-                <div className="p-4 bg-primary/5 rounded-xl border border-primary/20 space-y-2">
-                  <Label htmlFor="bggId" className="text-xs font-bold text-primary flex items-center justify-between">
-                    <span>Código BGG (BoardGameGeek ID)</span>
-                    {formData.bggRating && (
-                      <span className="text-[11px] font-bold text-amber-600 flex items-center gap-1">
-                        <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-                        <span>Rating: {formData.bggRating}</span>
-                      </span>
-                    )}
-                  </Label>
-                  <div className="flex gap-2">
+              <div className="space-y-4 animate-in fade-in-50 duration-150 min-w-0">
+                {/* ID & Rating BGG */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="bggIdTab3" className="text-xs font-bold">
+                      BoardGameGeek ID
+                    </Label>
                     <Input
-                      id="bggId"
+                      id="bggIdTab3"
                       value={formData.bggId}
                       onChange={(e) => setFormData({ ...formData, bggId: e.target.value })}
                       placeholder="Ej. 13 (Catan), 266192 (Wingspan)..."
-                      className="h-10 text-sm font-mono rounded-xl bg-background"
+                      className="h-9 text-xs font-mono rounded-lg"
                     />
-                    <Button
-                      type="button"
-                      onClick={handleFetchBgg}
-                      disabled={isFetchingBgg || !formData.bggId.trim()}
-                      className="gap-1.5 text-xs font-bold rounded-xl shrink-0"
-                    >
-                      {isFetchingBgg ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>Consultando...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-3.5 h-3.5" />
-                          <span>Autocompletar BGG</span>
-                        </>
-                      )}
-                    </Button>
                   </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    El botón autocompleta el nombre, rating, portada, jugadores, duración, mecánicas y editorial desde BGG.
-                  </p>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="bggRatingTab3" className="text-xs font-bold">
+                      Rating BGG (1 - 10)
+                    </Label>
+                    <Input
+                      id="bggRatingTab3"
+                      type="number"
+                      step="0.1"
+                      min="1"
+                      max="10"
+                      value={formData.bggRating != null ? String(formData.bggRating) : ''}
+                      onChange={(e) => setFormData({ ...formData, bggRating: e.target.value ? parseFloat(e.target.value) : null })}
+                      placeholder="Ej. 7.5"
+                      className="h-9 text-xs font-mono rounded-lg"
+                    />
+                  </div>
                 </div>
 
+                {/* Specs Lúdicas: Jugadores, Duración, Edad */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {/* Jugadores */}
                   <div className="space-y-1.5">
                     <Label htmlFor="numJugadores" className="text-xs font-bold">
                       N° Jugadores
@@ -745,11 +1037,10 @@ export function ProductFormModal({
                       value={formData.numJugadores}
                       onChange={(e) => setFormData({ ...formData, numJugadores: e.target.value })}
                       placeholder="Ej. 2 - 4 jugadores"
-                      className="h-10 text-xs rounded-xl"
+                      className="h-9 text-xs rounded-lg"
                     />
                   </div>
 
-                  {/* Duración */}
                   <div className="space-y-1.5">
                     <Label htmlFor="duracionMinutos" className="text-xs font-bold">
                       Duración (Minutos)
@@ -760,11 +1051,10 @@ export function ProductFormModal({
                       value={formData.duracionMinutos}
                       onChange={(e) => setFormData({ ...formData, duracionMinutos: e.target.value })}
                       placeholder="Ej. 60"
-                      className="h-10 text-xs rounded-xl"
+                      className="h-9 text-xs rounded-lg"
                     />
                   </div>
 
-                  {/* Edad */}
                   <div className="space-y-1.5">
                     <Label htmlFor="edadMinima" className="text-xs font-bold">
                       Edad Mínima
@@ -775,67 +1065,113 @@ export function ProductFormModal({
                       value={formData.edadMinima}
                       onChange={(e) => setFormData({ ...formData, edadMinima: e.target.value })}
                       placeholder="Ej. 10"
-                      className="h-10 text-xs rounded-xl"
+                      className="h-9 text-xs rounded-lg"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Idioma */}
-                  <div className="space-y-1.5">
-                    <Label htmlFor="idioma" className="text-xs font-bold">
-                      Idioma
-                    </Label>
-                    <Input
-                      id="idioma"
-                      value={formData.idioma}
-                      onChange={(e) => setFormData({ ...formData, idioma: e.target.value })}
-                      placeholder="Ej. Español, Inglés, Independiente"
-                      className="h-10 text-xs rounded-xl"
-                    />
-                  </div>
-
-                  {/* Mecánicas */}
-                  <div className="space-y-1.5">
-                    <Label htmlFor="mecanicas" className="text-xs font-bold">
-                      Mecánicas
-                    </Label>
-                    <Input
-                      id="mecanicas"
-                      value={formData.mecanicas}
-                      onChange={(e) => setFormData({ ...formData, mecanicas: e.target.value })}
-                      placeholder="Ej. Gestión de Mano, Colocación de Losetas"
-                      className="h-10 text-xs rounded-xl"
-                    />
+                {/* Idioma */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="idioma" className="text-xs font-bold">
+                    Idioma de la Edición
+                  </Label>
+                  <Input
+                    id="idioma"
+                    value={formData.idioma}
+                    onChange={(e) => setFormData({ ...formData, idioma: e.target.value })}
+                    placeholder="Ej. Español, Inglés, Independiente"
+                    className="h-9 text-xs rounded-lg"
+                  />
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {COMMON_LANGUAGES.map((lang) => (
+                      <button
+                        key={lang}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, idioma: lang })}
+                        className={`text-[10px] px-2 py-0.5 rounded-md border transition-colors cursor-pointer ${
+                          formData.idioma === lang
+                            ? 'bg-primary text-primary-foreground border-primary font-bold'
+                            : 'bg-secondary hover:bg-secondary/80 text-muted-foreground border-border'
+                        }`}
+                      >
+                        {lang}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                {/* Descripción Web */}
+                {/* Mecánicas */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="mecanicas" className="text-xs font-bold">
+                    Mecánicas del Juego
+                  </Label>
+                  <Input
+                    id="mecanicas"
+                    value={formData.mecanicas}
+                    onChange={(e) => setFormData({ ...formData, mecanicas: e.target.value })}
+                    placeholder="Ej. Gestión de Mano, Colocación de Losetas"
+                    className="h-9 text-xs rounded-lg"
+                  />
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {COMMON_MECHANICS.map((mec) => (
+                      <button
+                        key={mec}
+                        type="button"
+                        onClick={() => handleToggleMechanic(mec)}
+                        className={`text-[10px] px-2 py-0.5 rounded-md border transition-colors cursor-pointer ${
+                          formData.mecanicas.includes(mec)
+                            ? 'bg-primary/20 text-primary border-primary/40 font-bold'
+                            : 'bg-secondary hover:bg-secondary/80 text-muted-foreground border-border'
+                        }`}
+                      >
+                        + {mec}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Descripción / Sinopsis */}
                 <div className="space-y-1.5">
                   <Label htmlFor="descripcionWeb" className="text-xs font-bold">
-                    Descripción / Sinopsis
+                    Sinopsis / Descripción Web
                   </Label>
                   <textarea
                     id="descripcionWeb"
                     value={formData.descripcionWeb}
                     onChange={(e) => setFormData({ ...formData, descripcionWeb: e.target.value })}
                     rows={3}
-                    placeholder="Breve reseña del juego de mesa..."
-                    className="w-full text-xs p-3 rounded-xl border border-border bg-background focus:outline-primary"
+                    placeholder="Breve reseña del juego de mesa y componentes..."
+                    className="w-full text-xs p-3 rounded-lg border border-border bg-card focus:outline-primary"
+                  />
+                </div>
+
+                {/* Switch Destacado en Web */}
+                <div className="flex items-center justify-between p-3.5 bg-secondary/30 rounded-xl border border-border">
+                  <div>
+                    <Label className="text-xs font-bold block">Destacar en Tienda Web</Label>
+                    <span className="text-[11px] text-muted-foreground">
+                      Mostrar en sección de productos destacados
+                    </span>
+                  </div>
+                  <Switch
+                    checked={formData.destacadoWeb}
+                    onCheckedChange={(checked) => setFormData({ ...formData, destacadoWeb: checked })}
                   />
                 </div>
               </div>
             )}
           </div>
 
-          {/* Footer con botones de navegación y guardar */}
-          <div className="p-5 border-t border-border flex items-center justify-between bg-card sticky bottom-0">
+          {/* ========================================================================= */}
+          {/* FOOTER DEL FORMULARIO CON PASOS Y BOTONES                                */}
+          {/* ========================================================================= */}
+          <div className="p-4 sm:p-5 border-t border-border flex items-center justify-between bg-card sticky bottom-0 z-20 gap-2 flex-wrap">
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={onClose}
-              className="text-xs rounded-xl"
+              className="text-xs rounded-xl cursor-pointer"
             >
               Cancelar
             </Button>
@@ -847,20 +1183,48 @@ export function ProductFormModal({
                   variant="outline"
                   size="sm"
                   onClick={() => setActiveTab('precios')}
-                  className="text-xs rounded-xl"
+                  className="gap-1.5 text-xs rounded-xl cursor-pointer"
                 >
-                  Siguiente: Precios ➔
+                  <span>Precios & Stock</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </Button>
               )}
+
               {activeTab === 'precios' && (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setActiveTab('general')}
+                    className="gap-1.5 text-xs rounded-xl cursor-pointer"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>General</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setActiveTab('bgg')}
+                    className="gap-1.5 text-xs rounded-xl cursor-pointer"
+                  >
+                    <span>Specs BGG</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Button>
+                </>
+              )}
+
+              {activeTab === 'bgg' && (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setActiveTab('bgg')}
-                  className="text-xs rounded-xl"
+                  onClick={() => setActiveTab('precios')}
+                  className="gap-1.5 text-xs rounded-xl cursor-pointer"
                 >
-                  Siguiente: BGG ➔
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Precios</span>
                 </Button>
               )}
 
@@ -868,7 +1232,7 @@ export function ProductFormModal({
                 type="submit"
                 size="sm"
                 disabled={isSubmitting}
-                className="gap-1.5 text-xs font-bold rounded-xl"
+                className="gap-1.5 text-xs font-bold rounded-xl cursor-pointer"
               >
                 {isSubmitting ? (
                   <>
