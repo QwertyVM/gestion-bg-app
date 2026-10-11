@@ -16,14 +16,11 @@ import {
   Globe,
   Dices,
   Layers,
-  Tag,
   Plus,
-  Sparkles,
   TrendingUp,
   Warehouse,
   BookOpen,
   CheckCircle2,
-  AlertTriangle,
   Flame,
   ChevronDown,
   ChevronUp,
@@ -78,7 +75,7 @@ export function ProductDetailsModal({
     return []
   }, [group, singleProduct])
 
-  // Reset del índice al cambiar de juego o al abrir
+  // Reset al cambiar producto o al abrir
   useEffect(() => {
     setSelectedVariantIndex(0)
     setCopied(false)
@@ -97,22 +94,26 @@ export function ProductDetailsModal({
   const categoria = currentProduct.lineaCategoria || group?.lineaCategoria || 'General'
   const isMultiEdition = variants.length > 1
 
-  // Imagen actual (de la edición seleccionada o de la primera que tenga imagen)
-  const imageUrl = currentProduct.imagenUrl || (group?.variants.find((v) => v.producto.imagenUrl)?.producto.imagenUrl ?? null)
+  // Portada / Artwork
+  const coverUrl = currentProduct.imagenUrl || (group?.variants.find((v) => v.producto.imagenUrl)?.producto.imagenUrl ?? null)
 
   // BGG Data
   const bggId = currentProduct.bggId || group?.bggId
   const bggRating = currentProduct.bggRating ? Number(currentProduct.bggRating) : (group?.bggRating ?? null)
   const bggWeight = currentProduct.bggWeight ? Number(currentProduct.bggWeight) : null
 
-  // Precios de la edición activa
+  // Precios y métricas financieras exactas
   const costo = currentProduct.costoBase || 0
   const pvp = currentProduct.precioMercado || 0
   const amigos = currentProduct.precioAmigos || 0
   const gananciaPvp = Math.max(0, pvp - costo)
   const gananciaAmigos = Math.max(0, amigos - costo)
 
-  // Ratio costo vs ganancia para la barra visual
+  // Margen de ganancia sobre costo (Markup)
+  const markupPct = costo > 0 ? Math.round(((pvp - costo) / costo) * 100) : (pvp > 0 ? 100 : 0)
+  const markupAmigosPct = costo > 0 ? Math.round(((amigos - costo) / costo) * 100) : (amigos > 0 ? 100 : 0)
+
+  // Desglose Costo vs Margen sobre venta (PVP) para la barra NOVA
   const costoRatio = pvp > 0 ? Math.min(100, Math.max(0, Math.round((costo / pvp) * 100))) : 0
   const margenRatio = Math.max(0, 100 - costoRatio)
 
@@ -124,7 +125,7 @@ export function ProductDetailsModal({
     currentProduct.bulletPoint4
   ].filter(Boolean) as string[]
 
-  // Copiar cotización a WhatsApp
+  // Copiar cotización WhatsApp
   const handleCopyCotizacion = () => {
     let msg = `🎲 *${baseName}*`
     if (activeEditionName && activeEditionName !== 'Estándar') {
@@ -149,6 +150,10 @@ export function ProductDetailsModal({
       msg += `📦 Disponibilidad: ${currentProduct.stock && currentProduct.stock > 0 ? `${currentProduct.stock} unidades en stock` : 'Agotado temporalmente'}\n`
     }
 
+    if (bggId) {
+      msg += `🔗 Más info: https://boardgamegeek.com/boardgame/${bggId}\n`
+    }
+
     navigator.clipboard.writeText(msg)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -159,244 +164,107 @@ export function ProductDetailsModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         showCloseButton={false}
-        className="max-w-2xl w-[95vw] sm:w-full max-h-[92dvh] sm:max-h-[88dvh] p-0 flex flex-col overflow-hidden rounded-3xl border-border bg-card shadow-2xl"
+        className="w-full max-w-xl sm:max-w-xl bg-background border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh] p-0 gap-0 ring-0"
       >
         <DialogTitle className="sr-only">{baseName}</DialogTitle>
-        <DialogDescription className="sr-only">Ficha técnica y comercial del producto</DialogDescription>
+        <DialogDescription className="sr-only">Detalle y cotización del juego de mesa</DialogDescription>
 
         {/* ========================================================================= */}
-        {/* HERO HEADER REFINADO CON AMBIENT BACKDROP                                  */}
+        {/* ENCABEZADO Y PORTADA EDITORIAL                                            */}
         {/* ========================================================================= */}
-        <div className="relative shrink-0 overflow-hidden bg-secondary/35 border-b border-border/80">
-          {/* Ambient Glow de la portada */}
-          {imageUrl && (
-            <div
-              className="absolute inset-0 bg-cover bg-center blur-2xl opacity-20 dark:opacity-30 scale-125 pointer-events-none"
-              style={{ backgroundImage: `url(${imageUrl})` }}
-            />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-b from-card/30 via-transparent to-card/90 pointer-events-none" />
-
-          {/* Botón flotante para cerrar */}
+        <div className="px-6 pt-5 pb-4 border-b border-border/60 relative bg-card/60 shrink-0">
+          {/* Botón superior de cierre X */}
           <button
             type="button"
             onClick={onClose}
-            className="absolute top-3.5 right-3.5 z-20 h-8 w-8 rounded-full bg-card/85 backdrop-blur-md text-muted-foreground hover:text-foreground hover:bg-card flex items-center justify-center transition-all cursor-pointer border border-border/80 shadow-2xs"
-            title="Cerrar modal"
+            className="absolute top-4 right-4 z-20 h-7 w-7 rounded-full bg-secondary/80 hover:bg-secondary text-muted-foreground hover:text-foreground flex items-center justify-center transition-all cursor-pointer border border-border/70 shadow-2xs"
+            title="Cerrar"
           >
             <X className="h-4 w-4" />
           </button>
 
-          {/* Badges de cabecera */}
-          <div className="relative z-10 px-5 pt-4 pb-2 pr-12 flex items-center gap-1.5 flex-wrap">
-            <Badge
-              variant="outline"
-              className="text-[11px] font-bold bg-card/90 backdrop-blur-xs border-border/90 text-foreground px-2.5 py-0.5 rounded-full shadow-2xs"
-            >
-              {categoria}
-            </Badge>
-
-            {currentProduct.activo ? (
-              <span className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1.5 shadow-2xs">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Activo</span>
-              </span>
-            ) : (
-              <span className="bg-muted text-muted-foreground text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-border">
-                Archivado
-              </span>
-            )}
-
-            {currentProduct.destacadoWeb && (
-              <Badge
-                variant="outline"
-                className="text-[10px] font-bold gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30"
-              >
-                <Sparkles className="w-3 h-3 text-amber-500" />
-                <span>Destacado</span>
-              </Badge>
-            )}
-
-            {isMultiEdition && (
-              <Badge
-                variant="secondary"
-                className="text-[10px] font-bold gap-1 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border-primary/20"
-              >
-                <Layers className="w-3 h-3" />
-                <span>{variants.length} Ediciones</span>
-              </Badge>
-            )}
-          </div>
-
-          {/* Información principal del producto */}
-          <div className="relative z-10 px-5 pb-5 pt-1 sm:px-6 sm:pb-6 flex flex-col sm:flex-row gap-4 items-center sm:items-start text-center sm:text-left">
-            {/* Portada / Artwork */}
-            <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-secondary/80 border border-border overflow-hidden shrink-0 shadow-md flex items-center justify-center">
-              {imageUrl ? (
+          <div className="flex gap-4 items-start pr-6">
+            {/* Visor de Portada (Formato Caja/Libro) */}
+            <div className="w-20 h-28 rounded-xl bg-secondary/60 border border-border/80 shrink-0 shadow-2xs overflow-hidden flex items-center justify-center relative group">
+              {coverUrl ? (
                 <img
-                  src={imageUrl}
+                  src={coverUrl}
                   alt={baseName}
-                  className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                 />
               ) : (
-                <div className="w-full h-full bg-gradient-to-br from-secondary via-accent/30 to-secondary flex flex-col items-center justify-center p-2 text-center">
-                  <Dices className="w-7 h-7 text-primary/60 mb-1" />
-                  <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground/80">
-                    Sin portada
+                <div className="flex flex-col items-center justify-center p-1 text-center">
+                  <Dices className="w-8 h-8 text-primary/40" />
+                  <span className="text-[9px] font-semibold text-muted-foreground uppercase text-center mt-1">
+                    Sin Portada
                   </span>
                 </div>
               )}
             </div>
 
-            {/* Metadatos y Título */}
-            <div className="min-w-0 flex-1 space-y-1.5">
-              <div>
-                <h2 className="text-xl sm:text-2xl font-black text-foreground tracking-tight leading-snug">
-                  {baseName}
-                </h2>
-                {activeEditionName && activeEditionName !== 'Estándar' && (
-                  <p className="text-xs font-semibold text-primary flex items-center justify-center sm:justify-start gap-1 mt-0.5">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Edición: {activeEditionName}</span>
-                  </p>
-                )}
-              </div>
-
-              {/* Editorial / Idioma */}
-              <div className="flex items-center justify-center sm:justify-start gap-3 text-xs text-muted-foreground flex-wrap">
-                {currentProduct.editorialMarca && (
-                  <span className="inline-flex items-center gap-1.5 font-medium">
-                    <Building2 className="w-3.5 h-3.5 text-primary shrink-0" />
-                    <span>{currentProduct.editorialMarca}</span>
+            {/* Información del Juego */}
+            <div className="min-w-0 flex-1">
+              {/* Fila de Badges superiores */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {currentProduct.activo ? (
+                  <span className="bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    <span>Activo</span>
+                  </span>
+                ) : (
+                  <span className="bg-muted text-muted-foreground text-[10px] font-bold px-2 py-0.5 rounded-full border border-border">
+                    Archivado
                   </span>
                 )}
-                {currentProduct.idioma && (
-                  <span className="inline-flex items-center gap-1.5 font-medium">
-                    <Globe className="w-3.5 h-3.5 text-primary shrink-0" />
-                    <span>{currentProduct.idioma}</span>
-                  </span>
-                )}
-              </div>
 
-              {/* BGG Data Chips */}
-              <div className="flex items-center justify-center sm:justify-start gap-2 pt-1 flex-wrap">
-                {bggRating != null && (
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-400 font-bold text-xs shadow-2xs">
-                    <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500 shrink-0" />
-                    <span>{bggRating.toFixed(1)}</span>
-                    <span className="text-[10px] font-normal text-muted-foreground">/ 10 BGG</span>
-                  </div>
-                )}
+                <span className="bg-secondary text-foreground border border-border/80 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                  {currentProduct.idioma || 'Español'}
+                </span>
 
-                {bggId ? (
-                  <a
-                    href={`https://boardgamegeek.com/boardgame/${bggId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-card/80 hover:bg-card text-muted-foreground hover:text-foreground font-medium text-xs border border-border/80 transition-colors shadow-2xs"
+                {categoria && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] font-bold bg-card border-border/80 text-muted-foreground px-2 py-0.5 rounded-full"
                   >
-                    <span>Ver en BGG (#{bggId})</span>
-                    <ExternalLink className="w-3 h-3 text-primary" />
-                  </a>
-                ) : null}
+                    {categoria}
+                  </Badge>
+                )}
               </div>
+
+              {/* Título en casing natural, sin uppercase tosco */}
+              <h2 className="text-lg font-bold text-foreground leading-snug mt-1 line-clamp-2">
+                {baseName}
+              </h2>
+
+              {/* Enlace a BGG */}
+              {bggId ? (
+                <a
+                  href={`https://boardgamegeek.com/boardgame/${bggId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="border border-border/80 text-foreground text-xs font-semibold h-7 px-2.5 rounded-lg flex items-center gap-1.5 hover:bg-secondary w-fit mt-2 transition-colors cursor-pointer"
+                >
+                  <span>Ver en BGG (#{bggId})</span>
+                  <ExternalLink className="w-3 h-3 text-primary" />
+                </a>
+              ) : null}
             </div>
           </div>
         </div>
 
         {/* ========================================================================= */}
-        {/* CUERPO SCROLLEABLE                                                        */}
+        {/* CUERPO CENTRAL CON SCROLL VERTICAL SUAVE                                  */}
         {/* ========================================================================= */}
-        <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6 sm:py-6 space-y-6 min-w-0 overscroll-contain">
-          {/* ========================================================================= */}
-          {/* EDICIONES Y VERSIONES DISPONIBLES                                         */}
-          {/* ========================================================================= */}
-          {isMultiEdition ? (
-            <div className="bg-secondary/35 rounded-2xl p-4 border border-border/80 space-y-3">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-primary" />
-                  <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">
-                    Ediciones y Versiones ({variants.length})
-                  </h3>
-                </div>
-
-                {onAddEdition && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onAddEdition(currentProduct, baseName)}
-                    className="h-7 text-xs font-bold gap-1 rounded-xl border-primary/30 text-primary hover:bg-primary/10 cursor-pointer"
-                  >
-                    <Plus className="w-3 h-3" />
-                    <span>Nueva Edición</span>
-                  </Button>
-                )}
-              </div>
-
-              {/* Grid interactivo de variantes */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
-                {variants.map((v, idx) => {
-                  const isSelected = idx === selectedVariantIndex
-                  const p = v.producto
-                  const stockLabel = p.controlarStock
-                    ? (p.stock && p.stock > 0 ? `${p.stock} un.` : 'Agotado')
-                    : 'A pedido'
-
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => setSelectedVariantIndex(idx)}
-                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
-                        isSelected
-                          ? 'bg-card border-primary ring-2 ring-primary/20 shadow-xs'
-                          : 'bg-card/70 hover:bg-card border-border/70 hover:border-border'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-1.5 w-full">
-                        <div className="min-w-0 flex-1">
-                          <span className={`text-xs font-bold block truncate ${isSelected ? 'text-primary' : 'text-foreground'}`}>
-                            {v.variantName}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground">
-                            {p.controlarStock ? (
-                              p.stock && p.stock > 0 ? (
-                                <span className="text-emerald-700 dark:text-emerald-400 font-semibold">● {stockLabel}</span>
-                              ) : (
-                                <span className="text-rose-600 dark:text-rose-400 font-semibold">● Agotado</span>
-                              )
-                            ) : (
-                              <span>○ {stockLabel}</span>
-                            )}
-                          </span>
-                        </div>
-                        {isSelected && (
-                          <span className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1" />
-                        )}
-                      </div>
-
-                      <div className="flex items-center justify-between gap-1 pt-1.5 border-t border-border/50 w-full text-[11px]">
-                        <span className="font-mono font-bold text-foreground">
-                          {formatCurrency(p.precioMercado)}
-                        </span>
-                        <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400 font-semibold">
-                          {calcMargen(p.precioMercado, p.costoBase)}
-                        </span>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          ) : (
-            /* Versión única: Barra limpia y discreta sin duplicar información */
-            <div className="flex items-center justify-between p-3 rounded-xl bg-secondary/35 border border-border/70 text-xs">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Layers className="w-3.5 h-3.5 text-primary" />
-                <span>Edición:</span>
-                <span className="font-bold text-foreground">{activeEditionName || 'Estándar'}</span>
+        <div className="p-6 space-y-5 overflow-y-auto flex-1 min-w-0 overscroll-contain">
+          {/* Selector de Edición / Versión */}
+          <div className="space-y-2">
+            <div className="bg-secondary/50 border border-border/70 rounded-xl p-2.5 flex items-center justify-between">
+              <div className="flex items-center text-xs">
+                <Layers className="w-4 h-4 text-primary mr-2 inline shrink-0" />
+                <span className="text-muted-foreground">Edición activa:</span>
+                <span className="font-bold text-xs text-foreground ml-1">
+                  {activeEditionName || 'Estándar'}
+                </span>
               </div>
               {onAddEdition && (
                 <Button
@@ -404,152 +272,152 @@ export function ProductDetailsModal({
                   variant="ghost"
                   size="sm"
                   onClick={() => onAddEdition(currentProduct, baseName)}
-                  className="h-6 text-xs text-primary hover:text-primary hover:bg-primary/10 gap-1 rounded-lg px-2 font-semibold cursor-pointer"
+                  className="text-primary hover:bg-primary/10 text-xs font-semibold h-7 px-2.5 rounded-lg flex items-center gap-1 cursor-pointer"
                 >
-                  <Plus className="w-3 h-3" />
+                  <Plus className="w-3.5 h-3.5" />
                   <span>Añadir otra versión</span>
                 </Button>
               )}
             </div>
-          )}
+
+            {/* Selector de versiones interactivas si tiene múltiples ediciones */}
+            {isMultiEdition && (
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {variants.map((v, idx) => {
+                  const isSelected = idx === selectedVariantIndex
+                  return (
+                    <button
+                      key={v.producto.id}
+                      type="button"
+                      onClick={() => setSelectedVariantIndex(idx)}
+                      className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
+                        isSelected
+                          ? 'bg-primary text-primary-foreground border-primary font-bold shadow-2xs'
+                          : 'bg-secondary/60 hover:bg-secondary text-muted-foreground hover:text-foreground border-border/70'
+                      }`}
+                    >
+                      <span>{v.variantName}</span>
+                      <span className="font-mono text-[10px] opacity-80">
+                        ({formatCurrency(v.producto.precioMercado)})
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
 
           {/* ========================================================================= */}
-          {/* ESTRUCTURA FINANCIERA Y RENTABILIDAD                                       */}
+          {/* SECCIÓN PRECIOS Y RENTABILIDAD                                             */}
           {/* ========================================================================= */}
-          <div className="space-y-3.5">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                <TrendingUp className="w-3.5 h-3.5 text-primary" />
-                <span>Precios y Rentabilidad {isMultiEdition ? `(${activeEditionName})` : ''}</span>
-              </h3>
+          <div>
+            <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
+              <TrendingUp className="w-4 h-4 text-primary mr-2 inline" />
+              <span>Precios y Rentabilidad</span>
             </div>
 
-            {/* Tarjeta Hero de Precio de Venta (PVP) */}
-            <div className="bg-gradient-to-br from-primary/5 via-primary/8 to-card border border-primary/25 rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-xs">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-foreground tracking-tight">
-                    Precio Mercado (PVP)
-                  </span>
-                  <span className="text-[11px] text-muted-foreground">Tarifa principal al público</span>
+            {/* Tarjeta Principal (PVP Mercado / Venta) */}
+            <div className="bg-card border border-border rounded-xl p-4.5 shadow-2xs space-y-3.5">
+              {/* Cabecera de la Tarjeta */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold text-foreground">Precio Mercado (PVP)</div>
+                  <div className="text-[11px] text-muted-foreground">Tarifa principal al público</div>
                 </div>
                 <Badge
                   variant="outline"
-                  className="text-xs font-mono font-bold bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 px-2 py-0.5 rounded-full"
+                  className="bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/20 text-[10px] font-bold px-2 py-0.5 rounded-md"
                 >
-                  +{calcMargen(pvp, costo)} margen
+                  +{markupPct}% markup
                 </Badge>
               </div>
 
-              <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
-                <div className="flex items-baseline gap-1.5">
-                  <span className="font-mono text-3xl sm:text-4xl font-black text-foreground tracking-tight">
-                    {formatCurrency(pvp)}
+              {/* Monto y Ganancia */}
+              <div className="flex items-baseline justify-between">
+                <span className="text-3xl font-extrabold text-foreground tracking-tight font-mono">
+                  {formatCurrency(pvp)}
+                </span>
+                <div className="text-right">
+                  <span className="text-[11px] text-muted-foreground block">Ganancia estimada:</span>
+                  <span className="text-sm font-extrabold text-emerald-800 dark:text-emerald-300 font-mono">
+                    +{formatCurrency(gananciaPvp)}
                   </span>
-                </div>
-                <div className="text-xs font-medium text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
-                  <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Ganancia bruta estimada:</span>
-                  <span className="font-mono font-bold">+{formatCurrency(gananciaPvp)}</span>
                 </div>
               </div>
 
-              {/* Barra de desglose Costo vs Margen */}
+              {/* Barra de Rentabilidad NOVA (Costo vs. Margen) */}
               {pvp > 0 && (
-                <div className="space-y-1.5 pt-2 border-t border-primary/15">
+                <div className="space-y-1.5 pt-0.5">
                   <div className="h-2 w-full bg-secondary rounded-full overflow-hidden flex">
                     <div
-                      className="bg-muted-foreground/35 h-full transition-all duration-300"
+                      className="bg-muted-foreground/30 h-full transition-all duration-300"
                       style={{ width: `${costoRatio}%` }}
-                      title={`Costo: ${costoRatio}%`}
+                      title={`Inversión Costo: ${costoRatio}%`}
                     />
                     <div
-                      className="bg-emerald-500 h-full transition-all duration-300"
+                      className="bg-emerald-700 dark:bg-emerald-600 h-full transition-all duration-300"
                       style={{ width: `${margenRatio}%` }}
-                      title={`Margen: ${margenRatio}%`}
+                      title={`Margen sobre Venta: ${margenRatio}%`}
                     />
                   </div>
-                  <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono">
-                    <span>Inversión Costo: {formatCurrency(costo)} ({costoRatio}%)</span>
-                    <span className="text-emerald-700 dark:text-emerald-400 font-semibold">
-                      Margen Bruto: +{formatCurrency(gananciaPvp)} ({margenRatio}%)
+                  <div className="text-[11px] flex justify-between pt-1">
+                    <span className="text-muted-foreground font-medium">
+                      Inversión Costo: {formatCurrency(costo)} ({costoRatio}%)
+                    </span>
+                    <span className="text-emerald-800 dark:text-emerald-300 font-bold">
+                      Margen sobre Venta: +{formatCurrency(gananciaPvp)} ({margenRatio}%)
                     </span>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Grid de Tarifas Secundarias */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Costo Base de Adquisición */}
-              <div className="bg-secondary/35 p-3.5 sm:p-4 rounded-2xl border border-border/80 space-y-1">
-                <span className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider block">
-                  Costo Base (Adquisición)
+            {/* Cuadrícula de Tarifas Secundarias (Costo Base & Precio Amigos) */}
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              {/* Caja 1: Costo Base (Adquisición) */}
+              <div className="bg-secondary/40 border border-border/80 rounded-xl p-3 flex flex-col justify-between shadow-2xs">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  COSTO BASE
                 </span>
-                <span className="font-mono text-xl font-bold text-foreground block">
+                <span className="text-sm font-extrabold text-foreground mt-1 font-mono">
                   {formatCurrency(costo)}
-                </span>
-                <span className="text-[11px] text-muted-foreground block">
-                  Precio neto de compra o costo por unidad
                 </span>
               </div>
 
-              {/* Tarifa Especial / Amigos */}
-              <div className="bg-secondary/35 p-3.5 sm:p-4 rounded-2xl border border-border/80 space-y-1">
+              {/* Caja 2: Precio Amigos / Especial */}
+              <div className="bg-secondary/40 border border-border/80 rounded-xl p-3 flex flex-col justify-between shadow-2xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider block">
-                    Precio Amigos / Especial
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    PRECIO AMIGOS
                   </span>
-                  {amigos > 0 && (
-                    <Badge variant="outline" className="text-[10px] font-mono font-bold bg-card border-border/80 px-1.5 py-0">
-                      {calcMargen(amigos, costo)}
-                    </Badge>
+                  {amigos > 0 && costo > 0 && (
+                    <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 font-mono">
+                      +{markupAmigosPct}% markup
+                    </span>
                   )}
                 </div>
-
-                {amigos > 0 ? (
-                  <>
-                    <span className="font-mono text-xl font-bold text-foreground block">
-                      {formatCurrency(amigos)}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground font-mono block">
-                      Ganancia: +{formatCurrency(gananciaAmigos)}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-sm font-semibold text-muted-foreground/80 italic block pt-0.5">
-                      No asignado
-                    </span>
-                    <span className="text-[11px] text-muted-foreground block">
-                      Tarifa preferencial sin configurar
-                    </span>
-                  </>
-                )}
+                <span className="text-sm font-extrabold text-primary mt-1 font-mono">
+                  {amigos > 0 ? formatCurrency(amigos) : 'No asignado'}
+                </span>
               </div>
             </div>
 
-            {/* Banner de Oferta Especial si está activa */}
+            {/* Banner de Oferta Promocional si está activa */}
             {currentProduct.enOferta && currentProduct.precioOferta && (
-              <div className="bg-rose-500/10 border border-rose-500/30 p-3.5 sm:p-4 rounded-2xl flex items-center justify-between gap-3 shadow-2xs">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-xl bg-rose-500/20 text-rose-600 shrink-0">
-                    <Flame className="w-4 h-4" />
-                  </div>
+              <div className="bg-rose-500/10 border border-rose-500/25 p-3 rounded-xl flex items-center justify-between gap-3 shadow-2xs mt-3">
+                <div className="flex items-center gap-2">
+                  <Flame className="w-4 h-4 text-rose-600 shrink-0" />
                   <div>
                     <span className="text-xs font-bold text-rose-800 dark:text-rose-300 block">
-                      En Oferta Promocional ({currentProduct.porcentajeDescuento || 0}% de descuento)
+                      En Oferta Promocional ({currentProduct.porcentajeDescuento || 0}% OFF)
                     </span>
-                    <span className="text-[11px] text-rose-700/80 dark:text-rose-400">
+                    <span className="text-[10px] text-rose-700/80 dark:text-rose-400">
                       Precio de lista: {formatCurrency(pvp)}
                     </span>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <span className="text-[10px] text-rose-600 dark:text-rose-400 uppercase font-bold block">
-                    Precio Oferta
-                  </span>
-                  <span className="font-mono text-xl font-black text-rose-700 dark:text-rose-300">
+                  <span className="font-mono text-base font-extrabold text-rose-700 dark:text-rose-300">
                     {formatCurrency(Number(currentProduct.precioOferta))}
                   </span>
                 </div>
@@ -558,74 +426,72 @@ export function ProductDetailsModal({
           </div>
 
           {/* ========================================================================= */}
-          {/* FICHA TÉCNICA LÚDICA Y SPECS                                              */}
+          {/* ESPECIFICACIONES LÚDICAS Y SPECS                                          */}
           {/* ========================================================================= */}
           <div className="space-y-3">
-            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-              <Dices className="w-3.5 h-3.5 text-primary" />
+            <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center">
+              <Dices className="w-4 h-4 text-primary mr-2 inline" />
               <span>Especificaciones Lúdicas</span>
-            </h3>
+            </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {/* Jugadores */}
-              <div className="bg-secondary/35 p-3 rounded-xl border border-border/80 space-y-1">
+              <div className="bg-secondary/40 p-2.5 rounded-xl border border-border/80">
                 <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">
                   Jugadores
                 </span>
-                <div className="flex items-center gap-1.5">
-                  <Users className="w-4 h-4 text-primary shrink-0" />
-                  <span className="font-bold text-xs sm:text-sm text-foreground">
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <Users className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <span className="font-bold text-xs text-foreground truncate">
                     {currentProduct.numJugadores || '—'}
                   </span>
                 </div>
               </div>
 
               {/* Duración */}
-              <div className="bg-secondary/35 p-3 rounded-xl border border-border/80 space-y-1">
+              <div className="bg-secondary/40 p-2.5 rounded-xl border border-border/80">
                 <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">
                   Duración
                 </span>
-                <div className="flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-primary shrink-0" />
-                  <span className="font-bold text-xs sm:text-sm text-foreground">
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <Clock className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <span className="font-bold text-xs text-foreground truncate">
                     {currentProduct.duracionMinutos ? `${currentProduct.duracionMinutos} min` : '—'}
                   </span>
                 </div>
               </div>
 
               {/* Edad Mínima */}
-              <div className="bg-secondary/35 p-3 rounded-xl border border-border/80 space-y-1">
+              <div className="bg-secondary/40 p-2.5 rounded-xl border border-border/80">
                 <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">
                   Edad Mínima
                 </span>
-                <div className="flex items-center gap-1.5">
-                  <Baby className="w-4 h-4 text-primary shrink-0" />
-                  <span className="font-bold text-xs sm:text-sm text-foreground">
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <Baby className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <span className="font-bold text-xs text-foreground truncate">
                     {currentProduct.edadMinima ? `${currentProduct.edadMinima}+ años` : '—'}
                   </span>
                 </div>
               </div>
 
-              {/* Complejidad / Rating BGG */}
-              <div className="bg-secondary/35 p-3 rounded-xl border border-border/80 space-y-1">
+              {/* Rating BGG / Complejidad */}
+              <div className="bg-secondary/40 p-2.5 rounded-xl border border-border/80">
                 <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">
-                  {bggWeight ? 'Complejidad BGG' : 'Rating BGG'}
+                  {bggWeight ? 'Complejidad' : 'Rating BGG'}
                 </span>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 mt-0.5">
                   {bggWeight ? (
                     <>
-                      <Gauge className="w-4 h-4 text-primary shrink-0" />
-                      <span className="font-bold text-xs sm:text-sm text-foreground">
-                        {bggWeight.toFixed(1)}
-                        <span className="text-[10px] text-muted-foreground font-normal"> / 5</span>
+                      <Gauge className="w-3.5 h-3.5 text-primary shrink-0" />
+                      <span className="font-bold text-xs text-foreground">
+                        {bggWeight.toFixed(1)} <span className="text-[9px] text-muted-foreground font-normal">/ 5</span>
                       </span>
                     </>
                   ) : (
                     <>
-                      <Star className="w-4 h-4 fill-amber-500 text-amber-500 shrink-0" />
-                      <span className="font-bold text-xs sm:text-sm text-foreground">
-                        {bggRating ? bggRating.toFixed(1) : '—'}
-                        <span className="text-[10px] text-muted-foreground font-normal"> / 10</span>
+                      <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500 shrink-0" />
+                      <span className="font-bold text-xs text-foreground">
+                        {bggRating ? bggRating.toFixed(1) : '—'} <span className="text-[9px] text-muted-foreground font-normal">/ 10</span>
                       </span>
                     </>
                   )}
@@ -633,53 +499,54 @@ export function ProductDetailsModal({
               </div>
             </div>
 
-            {/* Mecánicas */}
-            {currentProduct.mecanicas && (
-              <div className="space-y-1.5 pt-1">
-                <span className="text-[11px] font-bold text-muted-foreground block">
-                  Mecánicas Principales:
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {currentProduct.mecanicas.split(',').map((mec, i) => (
-                    <Badge
-                      key={i}
-                      variant="outline"
-                      className="text-xs bg-secondary/50 text-foreground border-border/80 py-0.5 px-2.5 font-medium rounded-lg"
-                    >
-                      {mec.trim()}
-                    </Badge>
-                  ))}
-                </div>
+            {/* Editorial y Mecánicas */}
+            {(currentProduct.editorialMarca || currentProduct.mecanicas) && (
+              <div className="space-y-1.5 pt-0.5 text-xs">
+                {currentProduct.editorialMarca && (
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Building2 className="w-3.5 h-3.5 text-primary shrink-0" />
+                    <span>Editorial:</span>
+                    <span className="font-semibold text-foreground">{currentProduct.editorialMarca}</span>
+                  </div>
+                )}
+                {currentProduct.mecanicas && (
+                  <div className="flex flex-wrap gap-1 pt-0.5">
+                    {currentProduct.mecanicas.split(',').map((mec, i) => (
+                      <Badge
+                        key={i}
+                        variant="outline"
+                        className="text-[10px] bg-secondary/50 text-foreground border-border/80 py-0 px-2 font-medium rounded-md"
+                      >
+                        {mec.trim()}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Puntos Clave de Venta (Bullets) si existen */}
+            {/* Puntos Destacados (Bullets) si existen */}
             {bullets.length > 0 && (
-              <div className="space-y-2 pt-1">
-                <span className="text-[11px] font-bold text-muted-foreground block">
-                  Puntos Destacados:
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {bullets.map((b, i) => (
-                    <div
-                      key={i}
-                      className="p-2.5 rounded-xl bg-secondary/30 border border-border/70 flex items-start gap-2 text-xs text-foreground"
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
-                      <span>{b}</span>
-                    </div>
-                  ))}
-                </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                {bullets.map((b, i) => (
+                  <div
+                    key={i}
+                    className="p-2 rounded-xl bg-secondary/30 border border-border/70 flex items-start gap-1.5 text-xs text-foreground"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                    <span>{b}</span>
+                  </div>
+                ))}
               </div>
             )}
           </div>
 
           {/* ========================================================================= */}
-          {/* ALMACÉN & SINOPSIS                                                        */}
+          {/* ALMACÉN Y SINOPSIS                                                        */}
           {/* ========================================================================= */}
-          <div className="space-y-3 pt-2 border-t border-border/80">
+          <div className="space-y-3 pt-1 border-t border-border/70">
             {/* Disponibilidad en Almacén */}
-            <div className="flex items-center justify-between p-3.5 bg-secondary/35 rounded-2xl border border-border/80 text-xs">
+            <div className="flex items-center justify-between p-3 bg-secondary/40 rounded-xl border border-border/80 text-xs">
               <div className="flex items-center gap-2">
                 <Warehouse className="w-4 h-4 text-primary shrink-0" />
                 <span className="font-bold text-foreground">
@@ -687,15 +554,15 @@ export function ProductDetailsModal({
                 </span>
               </div>
               {currentProduct.controlarStock ? (
-                <span className="font-mono font-bold text-foreground">
+                <span className="font-mono font-bold">
                   {currentProduct.stock && currentProduct.stock > 0 ? (
                     <span className="inline-flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300 font-semibold">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                       {currentProduct.stock} {currentProduct.stock === 1 ? 'unidad' : 'unidades'} físicas
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1.5 text-rose-600 dark:text-rose-400 font-semibold">
-                      <span className="w-2 h-2 rounded-full bg-rose-500" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
                       Agotado (0 unidades)
                     </span>
                   )}
@@ -707,17 +574,17 @@ export function ProductDetailsModal({
               )}
             </div>
 
-            {/* Sinopsis / Descripción con expandible elegante */}
+            {/* Sinopsis / Reseña */}
             {currentProduct.descripcionWeb && (
-              <div className="bg-secondary/25 p-4 rounded-2xl border border-border/80 text-xs text-muted-foreground space-y-2">
-                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block flex items-center gap-1.5">
+              <div className="bg-secondary/30 p-3.5 rounded-xl border border-border/80 text-xs text-muted-foreground space-y-1.5">
+                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                   <BookOpen className="w-3.5 h-3.5 text-primary" />
                   <span>Sinopsis / Reseña</span>
-                </span>
-                <p className={`leading-relaxed whitespace-pre-wrap ${!isDescExpanded && currentProduct.descripcionWeb.length > 220 ? 'line-clamp-3' : ''}`}>
+                </div>
+                <p className={`leading-relaxed whitespace-pre-wrap ${!isDescExpanded && currentProduct.descripcionWeb.length > 200 ? 'line-clamp-3' : ''}`}>
                   {currentProduct.descripcionWeb}
                 </p>
-                {currentProduct.descripcionWeb.length > 220 && (
+                {currentProduct.descripcionWeb.length > 200 && (
                   <button
                     type="button"
                     onClick={() => setIsDescExpanded(!isDescExpanded)}
@@ -733,52 +600,47 @@ export function ProductDetailsModal({
         </div>
 
         {/* ========================================================================= */}
-        {/* DOCKED FOOTER ACTIONS (Fijo, elegante y responsive)                        */}
+        {/* FOOTER DEL MODAL (GARANTÍA CERO TRUNCAMIENTOS)                             */}
         {/* ========================================================================= */}
-        <div className="shrink-0 p-4 sm:p-5 border-t border-border/80 bg-card/95 backdrop-blur-md flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-          {/* Botón WhatsApp */}
+        <div className="border-t border-border/70 bg-card/40 px-6 py-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mt-auto shrink-0">
+          {/* Botón "Copiar Cotización WhatsApp" */}
           <Button
             type="button"
             variant="outline"
-            size="sm"
             onClick={handleCopyCotizacion}
-            className={`gap-2 text-xs font-semibold rounded-xl cursor-pointer transition-all border shadow-2xs ${
-              copied
-                ? 'bg-emerald-600 text-white border-emerald-600'
-                : 'border-emerald-600/30 text-emerald-800 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20'
+            className={`border-emerald-600/30 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/10 text-xs font-semibold h-10 px-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer ${
+              copied ? 'bg-emerald-500/15 border-emerald-600/50' : ''
             }`}
           >
             {copied ? (
-              <Check className="w-4 h-4 text-white" />
+              <Check className="w-3.5 h-3.5 text-emerald-600" />
             ) : (
-              <Share2 className="w-4 h-4 text-emerald-600" />
+              <Share2 className="w-3.5 h-3.5 text-emerald-600" />
             )}
             <span>{copied ? '¡Cotización copiada!' : 'Copiar Cotización WhatsApp'}</span>
           </Button>
 
-          {/* Acciones principales */}
+          {/* Acciones de la derecha */}
           <div className="flex items-center gap-2 justify-end">
             <Button
               type="button"
-              variant="outline"
-              size="sm"
+              variant="ghost"
               onClick={onClose}
-              className="text-xs rounded-xl cursor-pointer px-4"
+              className="rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary h-10 px-4 cursor-pointer"
             >
               Cerrar
             </Button>
 
             <Button
               type="button"
-              size="sm"
               onClick={() => {
                 onClose()
                 onEdit(currentProduct)
               }}
-              className="gap-1.5 text-xs rounded-xl font-bold cursor-pointer bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs px-4"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs h-10 px-4.5 rounded-xl shadow-md shadow-primary/20 flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer"
             >
               <Pencil className="w-3.5 h-3.5" />
-              <span>Editar {activeEditionName && activeEditionName !== 'Estándar' ? `(${activeEditionName})` : 'Ficha'}</span>
+              <span>Editar Juego</span>
             </Button>
           </div>
         </div>

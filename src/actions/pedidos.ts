@@ -127,7 +127,8 @@ function serializePedido(p: any, filamentosMap?: Map<string, any>) {
         precioMercado: Number(it.producto.precioMercado),
         precioComunidad: Number(it.producto.precioComunidad),
         pesoGramos: it.producto.pesoGramos != null ? Number(it.producto.pesoGramos) : 0,
-        activo: it.producto.activo
+        activo: it.producto.activo,
+        imagenUrl: it.producto.imagenUrl || null
       } : null,
       colorFilamento: primaryColorFilamento
     }

@@ -1,13 +1,15 @@
 import { getPedidos } from '@/actions/pedidos'
 import { getProductos } from '@/actions/productos'
+import { getClientes } from '@/actions/clientes'
 import { PedidosClient } from '@/components/pedidos/PedidosClient'
 
 export const dynamic = 'force-dynamic'
 
 export default async function PedidosPage() {
-  const [pedidos, productos] = await Promise.all([
+  const [pedidos, productos, clientes] = await Promise.all([
     getPedidos(),
-    getProductos()
+    getProductos(),
+    getClientes()
   ])
 
   return (
@@ -15,6 +17,8 @@ export default async function PedidosPage() {
       pedidosIniciales={pedidos as any}
       productos={productos as any}
       filamentos={[]}
+      clientesIniciales={clientes as any}
     />
   )
 }
+

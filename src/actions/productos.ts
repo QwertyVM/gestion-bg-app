@@ -16,6 +16,27 @@ function safeRevalidate() {
   } catch (e) {}
 }
 
+function serializeProducto(p: any) {
+  if (!p) return null
+  return {
+    ...p,
+    activo: p.activo ?? true,
+    costoBase: Number(p.costoBase),
+    precioAmigos: Number(p.precioAmigos),
+    precioMercado: Number(p.precioMercado),
+    precioComunidad: p.precioComunidad != null ? Number(p.precioComunidad) : Number(p.precioMercado),
+    pesoGramos: p.pesoGramos != null ? Number(p.pesoGramos) : 0,
+    precioOferta: p.precioOferta != null ? Number(p.precioOferta) : null,
+    stock: p.stock != null ? Number(p.stock) : 0,
+    controlarStock: Boolean(p.controlarStock),
+    bggRating: p.bggRating != null ? Number(p.bggRating) : null,
+    bggWeight: p.bggWeight != null ? Number(p.bggWeight) : null,
+    bggRatingUpdatedAt: p.bggRatingUpdatedAt ? (p.bggRatingUpdatedAt instanceof Date ? p.bggRatingUpdatedAt.toISOString() : String(p.bggRatingUpdatedAt)) : null,
+    createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : String(p.createdAt),
+    updatedAt: p.updatedAt instanceof Date ? p.updatedAt.toISOString() : String(p.updatedAt),
+  }
+}
+
 export async function getProductos(negocio?: TipoNegocio) {
   const targetNegocio = negocio || await getActiveNegocioServer()
 
@@ -28,20 +49,7 @@ export async function getProductos(negocio?: TipoNegocio) {
     ]
   })
 
-  return productos.map(p => ({
-    ...p,
-    activo: p.activo ?? true,
-    costoBase: Number(p.costoBase),
-    precioAmigos: Number(p.precioAmigos),
-    precioMercado: Number(p.precioMercado),
-    precioComunidad: Number(p.precioComunidad),
-    pesoGramos: p.pesoGramos != null ? Number(p.pesoGramos) : 0,
-    precioOferta: p.precioOferta != null ? Number(p.precioOferta) : null,
-    stock: p.stock != null ? Number(p.stock) : 0,
-    controlarStock: Boolean(p.controlarStock),
-    createdAt: p.createdAt.toISOString(),
-    updatedAt: p.updatedAt.toISOString(),
-  }))
+  return productos.map(serializeProducto)
 }
 
 export async function createProducto(data: {
@@ -108,17 +116,7 @@ export async function createProducto(data: {
   })
 
   safeRevalidate()
-  return {
-    ...producto,
-    costoBase: Number(producto.costoBase),
-    precioAmigos: Number(producto.precioAmigos),
-    precioMercado: Number(producto.precioMercado),
-    precioComunidad: Number(producto.precioComunidad),
-    pesoGramos: producto.pesoGramos != null ? Number(producto.pesoGramos) : 0,
-    precioOferta: producto.precioOferta != null ? Number(producto.precioOferta) : null,
-    createdAt: producto.createdAt.toISOString(),
-    updatedAt: producto.updatedAt.toISOString(),
-  }
+  return serializeProducto(producto)
 }
 
 export async function updateProducto(id: string, data: {
@@ -214,17 +212,7 @@ export async function updateProducto(id: string, data: {
   }
 
   safeRevalidate()
-  return {
-    ...producto,
-    costoBase: Number(producto.costoBase),
-    precioAmigos: Number(producto.precioAmigos),
-    precioMercado: Number(producto.precioMercado),
-    precioComunidad: Number(producto.precioComunidad),
-    pesoGramos: producto.pesoGramos != null ? Number(producto.pesoGramos) : 0,
-    precioOferta: producto.precioOferta != null ? Number(producto.precioOferta) : null,
-    createdAt: producto.createdAt.toISOString(),
-    updatedAt: producto.updatedAt.toISOString(),
-  }
+  return serializeProducto(producto)
 }
 
 export async function toggleEstadoProducto(id: string) {
@@ -237,17 +225,7 @@ export async function toggleEstadoProducto(id: string) {
   })
 
   safeRevalidate()
-  return {
-    ...updated,
-    costoBase: Number(updated.costoBase),
-    precioAmigos: Number(updated.precioAmigos),
-    precioMercado: Number(updated.precioMercado),
-    precioComunidad: Number(updated.precioComunidad),
-    pesoGramos: updated.pesoGramos != null ? Number(updated.pesoGramos) : 0,
-    precioOferta: updated.precioOferta != null ? Number(updated.precioOferta) : null,
-    createdAt: updated.createdAt.toISOString(),
-    updatedAt: updated.updatedAt.toISOString(),
-  }
+  return serializeProducto(updated)
 }
 
 export async function duplicarProducto(id: string) {
@@ -283,17 +261,7 @@ export async function duplicarProducto(id: string) {
   })
 
   safeRevalidate()
-  return {
-    ...duplicado,
-    costoBase: Number(duplicado.costoBase),
-    precioAmigos: Number(duplicado.precioAmigos),
-    precioMercado: Number(duplicado.precioMercado),
-    precioComunidad: Number(duplicado.precioComunidad),
-    pesoGramos: duplicado.pesoGramos != null ? Number(duplicado.pesoGramos) : 0,
-    precioOferta: duplicado.precioOferta != null ? Number(duplicado.precioOferta) : null,
-    createdAt: duplicado.createdAt.toISOString(),
-    updatedAt: duplicado.updatedAt.toISOString(),
-  }
+  return serializeProducto(duplicado)
 }
 
 export async function deleteProducto(id: string) {

@@ -50,6 +50,11 @@ import { DateRange, getPresetDateRange, isDateInRange } from '@/lib/date-utils'
 import { EstadoPedido, TipoPrecio } from '@prisma/client'
 import { createPedido, updateEstadoPedido, updatePedido, addPagoPedido, deletePedido } from '@/actions/pedidos'
 import { formatDate } from '@/lib/utils'
+import { OrderCustomerSection, type ClienteOption } from './OrderCustomerSection'
+import { createCliente } from '@/actions/clientes'
+import { toast } from 'sonner'
+import { OrderDetailsModal } from './OrderDetailsModal'
+import { OrdersTableView } from './OrdersTableView'
 
 export interface ItemPedidoView {
   id: string
@@ -78,6 +83,7 @@ export interface ItemPedidoView {
     precioComunidad?: number
     pesoGramos: number
     activo: boolean
+    imagenUrl?: string | null
   } | null
   colorFilamento?: {
     id: string
@@ -136,6 +142,7 @@ export interface ProductoOption {
   precioComunidad?: number
   pesoGramos: number
   activo: boolean
+  imagenUrl?: string | null
 }
 
 export interface FilamentoOption {
@@ -154,6 +161,7 @@ interface PedidosClientProps {
   pedidosIniciales: PedidoView[]
   productos: ProductoOption[]
   filamentos?: FilamentoOption[]
+  clientesIniciales?: ClienteOption[]
 }
 
 interface FormItemState {
@@ -215,7 +223,7 @@ const ESTADOS_CONFIG: Record<EstadoPedido, { label: string; colorBg: string; col
   }
 }
 
-export function PedidosClient({ pedidosIniciales, productos, filamentos }: PedidosClientProps) {
+export function PedidosClient({ pedidosIniciales, productos, filamentos, clientesIniciales }: PedidosClientProps) {
   const [pedidos, setPedidos] = useState<PedidoView[]>(pedidosIniciales)
   const [search, setSearch] = useState('')
   const [selectedEstadoFilter, setSelectedEstadoFilter] = useState<string>('TODOS')
@@ -260,6 +268,101 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
   const [formMetodoPago, setFormMetodoPago] = useState('YAPE')
   const [formNotasPago, setFormNotasPago] = useState('')
   const [formDescontarStock, setFormDescontarStock] = useState(true)
+
+  // =========================================================================
+  // GESTIÓN Y BÚSQUEDA DE CLIENTES (ESTILO GESTIÓN 3D)
+  // =========================================================================
+  const [clientesList, setClientesList] = useState<ClienteOption[]>(() => clientesIniciales || [])
+  const [clientSelectMode, setClientSelectMode] = useState<'EXISTING' | 'NEW'>(() => (clientesIniciales && clientesIniciales.length > 0 ? 'EXISTING' : 'NEW'))
+  const [selectedClientOption, setSelectedClientOption] = useState<ClienteOption | null>(null)
+  const [clientSearchTerm, setClientSearchTerm] = useState('')
+  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false)
+  const [isRegisteringClientInline, setIsRegisteringClientInline] = useState(false)
+
+  // Filtrado de clientes para autocompletado flotante
+  const filteredClientOptions = useMemo(() => {
+    if (!clientSearchTerm.trim()) {
+      return (clientesList || []).slice(0, 30)
+    }
+    const q = clientSearchTerm.trim().toLowerCase()
+    const qNorm = q.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    return (clientesList || []).filter(c => {
+      const n = (c.nombre || '').toLowerCase()
+      const nNorm = n.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      const t = c.telefono || ''
+      const d = c.dni || ''
+      return n.includes(q) || nNorm.includes(qNorm) || t.includes(q) || d.includes(q)
+    }).slice(0, 20)
+  }, [clientesList, clientSearchTerm])
+
+  // Detección preventiva de duplicados en modo nuevo
+  const similarExistingClient = useMemo(() => {
+    if (clientSelectMode !== 'NEW' || !formCliente.trim()) return null
+    const cleanInput = formCliente.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    return (clientesList || []).find(c => {
+      const cleanC = (c.nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+      return cleanC === cleanInput || (cleanInput.length >= 4 && cleanC.includes(cleanInput))
+    }) || null
+  }, [clientSelectMode, formCliente, clientesList])
+
+  // Manejadores del buscador de cliente
+  const handleSelectClient = (c: ClienteOption) => {
+    setSelectedClientOption(c)
+    setClientSelectMode('EXISTING')
+    setFormCliente(c.nombre)
+    if (c.dni) setFormDni(c.dni)
+    if (c.telefono) setFormTelefono(c.telefono)
+    if (c.canalOrigen || c.canalPreferido) setFormCanal(c.canalOrigen || c.canalPreferido || 'WhatsApp')
+    if (c.direccion || c.distrito) setFormDestino(c.direccion || c.distrito || '')
+    setIsClientDropdownOpen(false)
+    setClientSearchTerm('')
+  }
+
+  const handleClearSelectedClient = () => {
+    setSelectedClientOption(null)
+    setIsClientDropdownOpen(true)
+  }
+
+  const handleSwitchToNewClient = (presetName = '') => {
+    setSelectedClientOption(null)
+    setClientSelectMode('NEW')
+    setFormCliente(presetName || clientSearchTerm.trim() || formCliente || '')
+    setIsClientDropdownOpen(false)
+  }
+
+  const handleRegisterClientInline = async () => {
+    if (!formCliente.trim()) {
+      toast.error('Ingresa al menos el nombre del cliente')
+      return
+    }
+    setIsRegisteringClientInline(true)
+    try {
+      const created = await createCliente({
+        nombre: formCliente.trim(),
+        dni: formDni.trim() || undefined,
+        telefono: formTelefono.trim() || undefined,
+        canalOrigen: formCanal,
+        direccion: formDestino.trim() || undefined
+      })
+      const newOption: ClienteOption = {
+        id: created.id,
+        nombre: created.nombre,
+        dni: created.dni,
+        telefono: created.telefono,
+        canalOrigen: created.canalOrigen,
+        canalPreferido: created.canalOrigen,
+        direccion: created.direccion
+      }
+      setClientesList(prev => [newOption, ...prev])
+      setSelectedClientOption(newOption)
+      setClientSelectMode('EXISTING')
+      toast.success(`Cliente "${created.nombre}" guardado en el directorio`)
+    } catch (err: any) {
+      toast.error(err.message || 'Error al guardar cliente')
+    } finally {
+      setIsRegisteringClientInline(false)
+    }
+  }
 
   // Lista dinámica de ítems
   const [formItems, setFormItems] = useState<FormItemState[]>(() => {
@@ -366,6 +469,10 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
     setFormDni('')
     setFormTelefono('')
     setFormCanal('WhatsApp')
+    setSelectedClientOption(null)
+    setClientSelectMode((clientesList || []).length > 0 ? 'EXISTING' : 'NEW')
+    setClientSearchTerm('')
+    setIsClientDropdownOpen(false)
     setFormDestino('')
     setFormDiaEntrega('')
     setFormNotas('')
@@ -458,6 +565,16 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
     setFormDni(p.dni || '')
     setFormTelefono(p.telefono || '')
     setFormCanal(p.canalVenta || 'WhatsApp')
+    const matchedClient = (clientesList || []).find(c => c.nombre.trim().toLowerCase() === p.cliente.trim().toLowerCase())
+    if (matchedClient) {
+      setSelectedClientOption(matchedClient)
+      setClientSelectMode('EXISTING')
+    } else {
+      setSelectedClientOption(null)
+      setClientSelectMode('NEW')
+    }
+    setClientSearchTerm('')
+    setIsClientDropdownOpen(false)
     setFormDestino(p.destinoEnvio || '')
     setFormDiaEntrega(p.diaEntregaPrometida || '')
     setFormNotas(p.notas || '')
@@ -540,10 +657,12 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
     }
   }
 
-  // =========================================================================
-  // TRANSICIONAR ESTADO DEL PEDIDO
+  // TRANSICIONAR ESTADO DEL PEDIDO (REACTIVO CON ACTUALIZACIÓN OPTIMISTA)
   // =========================================================================
   const handleCambiarEstado = async (pedidoId: string, nuevoEstado: EstadoPedido) => {
+    const previousPedidos = pedidos
+    // Actualización optimista inmediata en tabla y KPI superior
+    setPedidos(prev => prev.map(p => p.id === pedidoId ? { ...p, estado: nuevoEstado } : p))
     try {
       const res = await updateEstadoPedido(pedidoId, nuevoEstado)
       if (res.success && res.pedido) {
@@ -551,11 +670,14 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
         if (selectedPedidoDetail && selectedPedidoDetail.id === pedidoId) {
           setSelectedPedidoDetail(res.pedido as any)
         }
+        toast.success(`Estado actualizado a ${ESTADOS_CONFIG[nuevoEstado]?.label || nuevoEstado}`)
       } else {
-        alert(res.error || 'Error al cambiar estado')
+        setPedidos(previousPedidos)
+        toast.error(res.error || 'Error al cambiar estado')
       }
     } catch (err: any) {
-      alert(err.message || 'Error al actualizar estado')
+      setPedidos(previousPedidos)
+      toast.error(err.message || 'Error al actualizar estado')
     }
   }
 
@@ -744,19 +866,19 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
   return (
     <div className="space-y-4 sm:space-y-5 animate-in fade-in duration-300">
       {/* ========================================================================= */}
-      {/* 1. HEADER SIMPLE Y ELEGANTE                                               */}
+      {/* 1. CABECERA Y BOTÓN PRIMARIO DE PEDIDO                                    */}
       {/* ========================================================================= */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-black text-[#241C15] tracking-tight">
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl font-bold text-foreground tracking-tight">
               Gestión de Pedidos
             </h1>
-            <span className="text-xs font-bold text-[#75695D] font-mono">
+            <span className="text-2xl font-bold text-foreground">
               ({kpis.totalPedidos})
             </span>
           </div>
-          <p className="text-xs text-[#75695D] mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             Registro, control de pagos y envíos por cliente.
           </p>
         </div>
@@ -766,84 +888,106 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
             resetForm()
             setIsNewOrderModalOpen(true)
           }}
-          className="h-9 px-3.5 rounded-xl bg-[#1E5E3A] hover:bg-[#16482C] text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer self-start sm:self-auto active:scale-[0.98]"
+          className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs h-10 px-4.5 rounded-xl shadow-md shadow-primary/20 flex items-center gap-2 transition-all active:scale-[0.98] cursor-pointer self-start sm:self-auto"
         >
           <Plus className="h-4 w-4 stroke-[2.5]" />
-          <span>Nuevo Pedido</span>
+          <span>+ Nuevo Pedido</span>
         </Button>
       </div>
 
       {/* ========================================================================= */}
-      {/* 2. KPIS EJECUTIVOS DE PEDIDOS (MINIMALISTAS)                              */}
+      {/* 2. KPIS SUPERIORES DE FLUJO DE CAJA Y PEDIDOS (5 TARJETAS EN 1 FILA)      */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 mb-6">
         {/* KPI 1: Total Pedidos */}
-        <div className="rounded-2xl border border-[#E2D9CC] bg-white p-3.5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-[#75695D] mb-1">
-            <span className="text-xs font-semibold text-[#6B7280]">Total Pedidos</span>
-            <div className="p-1 rounded-md bg-[#FAF7F4] text-[#7C5835]">
+        <div className="bg-card border border-border rounded-xl p-4 shadow-2xs flex flex-col justify-between h-[96px]">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              Total Pedidos
+            </span>
+            <div className="w-7 h-7 rounded-lg bg-secondary text-primary flex items-center justify-center shrink-0">
               <Boxes className="h-3.5 w-3.5" />
             </div>
           </div>
           <div className="flex items-baseline gap-1.5 flex-wrap">
-            <span className="font-mono text-xl font-black text-[#1F2937] tabular-nums">{kpis.totalPedidos}</span>
-            <span className="text-xs text-[#75695D]">({kpis.totalPiezas} unidades)</span>
+            <span className="text-xl font-extrabold text-foreground tracking-tight tabular-nums">
+              {kpis.totalPedidos}
+            </span>
+            <span className="text-[11px] text-muted-foreground">
+              ({kpis.totalPiezas} unidades)
+            </span>
           </div>
         </div>
 
-        {/* KPI 2: En Producción */}
-        <div className="rounded-2xl border border-[#E2D9CC] bg-white p-3.5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-[#75695D] mb-1">
-            <span className="text-xs font-semibold text-[#6B7280]">Preparando</span>
-            <div className="p-1 rounded-md bg-[#FAF7F4] text-[#2B6CB0]">
+        {/* KPI 2: Preparando */}
+        <div className="bg-card border border-border rounded-xl p-4 shadow-2xs flex flex-col justify-between h-[96px]">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              Preparando
+            </span>
+            <div className="w-7 h-7 rounded-lg bg-secondary text-primary flex items-center justify-center shrink-0">
               <Package className="h-3.5 w-3.5" />
             </div>
           </div>
           <div className="flex items-baseline gap-1.5 flex-wrap">
-            <span className="font-mono text-xl font-black text-[#2B6CB0] tabular-nums">{kpis.enProduccion}</span>
-            <span className="text-xs text-[#75695D]">en preparación</span>
+            <span className="text-xl font-extrabold text-foreground tracking-tight tabular-nums">
+              {kpis.enProduccion}
+            </span>
+            <span className="text-[11px] text-muted-foreground">
+              en preparación
+            </span>
           </div>
         </div>
 
-        {/* KPI 3: Por Entregar / Listos */}
-        <div className="rounded-2xl border border-[#E2D9CC] bg-white p-3.5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-[#75695D] mb-1">
-            <span className="text-xs font-semibold text-[#6B7280]">Por Entregar</span>
-            <div className="p-1 rounded-md bg-[#FAF7F4] text-[#805AD5]">
+        {/* KPI 3: Por Entregar */}
+        <div className="bg-card border border-border rounded-xl p-4 shadow-2xs flex flex-col justify-between h-[96px]">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              Por Entregar
+            </span>
+            <div className="w-7 h-7 rounded-lg bg-secondary text-primary flex items-center justify-center shrink-0">
               <Package className="h-3.5 w-3.5" />
             </div>
           </div>
           <div className="flex items-baseline gap-1.5 flex-wrap">
-            <span className="font-mono text-xl font-black text-[#805AD5] tabular-nums">{kpis.listos}</span>
-            <span className="text-xs text-[#75695D]">listos</span>
+            <span className="text-xl font-extrabold text-foreground tracking-tight tabular-nums">
+              {kpis.listos}
+            </span>
+            <span className="text-[11px] text-muted-foreground">
+              listos
+            </span>
           </div>
         </div>
 
         {/* KPI 4: Saldo por Cobrar */}
-        <div className="rounded-2xl border border-[#E2D9CC] bg-white p-3.5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-[#75695D] mb-1">
-            <span className="text-xs font-semibold text-[#6B7280]">Por Cobrar</span>
-            <div className="p-1 rounded-md bg-[#FAF7F4] text-[#92400E]">
+        <div className="bg-card border border-border rounded-xl p-4 shadow-2xs flex flex-col justify-between h-[96px]">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              Por Cobrar
+            </span>
+            <div className="w-7 h-7 rounded-lg bg-secondary text-primary flex items-center justify-center shrink-0">
               <DollarSign className="h-3.5 w-3.5" />
             </div>
           </div>
           <div className="flex items-baseline gap-1.5">
-            <span className="font-mono text-lg font-black text-[#92400E] truncate tabular-nums">
+            <span className="text-xl font-extrabold text-foreground tracking-tight tabular-nums truncate">
               {formatCurrency(kpis.saldoPorCobrar)}
             </span>
           </div>
         </div>
 
-        {/* KPI 5: Cobrado en Caja */}
-        <div className="rounded-2xl border border-[#E2D9CC] bg-white p-3.5 shadow-xs flex flex-col justify-between col-span-2 sm:col-span-1">
-          <div className="flex items-center justify-between text-[#75695D] mb-1">
-            <span className="text-xs font-semibold text-[#6B7280]">Cobrado</span>
-            <div className="p-1 rounded-md bg-[#FAF7F4] text-[#059669]">
+        {/* KPI 5: Cobrado */}
+        <div className="bg-card border border-border rounded-xl p-4 shadow-2xs flex flex-col justify-between h-[96px] col-span-2 sm:col-span-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              Cobrado
+            </span>
+            <div className="w-7 h-7 rounded-lg bg-secondary text-primary flex items-center justify-center shrink-0">
               <CheckCircle2 className="h-3.5 w-3.5" />
             </div>
           </div>
           <div className="flex items-baseline gap-1.5">
-            <span className="font-mono text-lg font-black text-[#059669] truncate tabular-nums">
+            <span className="text-xl font-extrabold text-emerald-800 dark:text-emerald-300 tracking-tight tabular-nums truncate">
               {formatCurrency(kpis.totalCobrado)}
             </span>
           </div>
@@ -851,375 +995,110 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
       </div>
 
       {/* ========================================================================= */}
-      {/* 3. PANEL MAESTRO: FILTROS + TABLA / TARJETAS EN UN SOLO CONTENEDOR        */}
+      {/* 3. BARRA DE HERRAMIENTAS Y FILTROS (SIN TRUNCAMIENTOS)                    */}
       {/* ========================================================================= */}
-      <div className="bg-[#FFFFFF] border border-[#E2D9CC] rounded-3xl shadow-xs overflow-hidden">
-        {/* Toolbar Integrada en 1 Fila (Opción 1: Buscador Principal + Selectores Dropdown) */}
-        <div className="p-2.5 sm:p-3 bg-[#FFFFFF] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-          {/* Buscador Amplio */}
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#75695D]" />
-            <Input
-              placeholder="Buscar por cliente, código (#PED-001), producto o teléfono..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value)
+      <div className="w-full bg-card border border-border rounded-2xl p-3 shadow-2xs mb-6 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+        {/* Izquierda: Buscador 100% elástico (sin vacío residual) */}
+        <div className="relative flex-1 w-full max-w-none lg:max-w-xl">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por cliente, código (#BG-XXX) o producto..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setCurrentPage(1)
+            }}
+            className="h-10 w-full rounded-xl border border-input bg-background pl-10 pr-9 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-2xs"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch('')
                 setCurrentPage(1)
               }}
-              className="pl-8.5 pr-7 h-8.5 bg-[#FAF8F5] border-[#E2D9CC] text-xs sm:text-sm text-[#241C15] placeholder:text-[#A89F91] rounded-xl focus:bg-white"
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearch('')
-                  setCurrentPage(1)
-                }}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#75695D] hover:text-[#241C15] p-0.5 cursor-pointer"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-
-          {/* Grupo de Filtros Compactos a la Derecha */}
-          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-between sm:justify-end shrink-0">
-            {/* Filtro de Fecha */}
-            <DateFilterControl
-              value={dateRange}
-              onChange={(range) => {
-                setDateRange(range)
-                setCurrentPage(1)
-              }}
-              label="Filtrar Pedidos"
-              align="right"
-            />
-
-            {/* Filtro de Estado (Dropdown) */}
-            <select
-              value={selectedEstadoFilter}
-              onChange={(e) => {
-                setSelectedEstadoFilter(e.target.value)
-                setCurrentPage(1)
-              }}
-              className="h-8.5 rounded-xl border border-[#E2D9CC] bg-[#FAF8F5] px-2.5 text-xs font-semibold text-[#241C15] cursor-pointer focus:outline-none"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
             >
-              <option value="TODOS">Todos los estados ({pedidos.length})</option>
-              {Object.entries(ESTADOS_CONFIG).map(([stKey, conf]) => {
-                const count = pedidos.filter(p => p.estado === stKey).length
-                return (
-                  <option key={stKey} value={stKey}>
-                    {conf.label} ({count})
-                  </option>
-                )
-              })}
-            </select>
-
-            {/* Filtro de Pago (Dropdown) */}
-            <select
-              value={selectedPagoFilter}
-              onChange={(e) => {
-                setSelectedPagoFilter(e.target.value)
-                setCurrentPage(1)
-              }}
-              className="h-8.5 rounded-xl border border-[#E2D9CC] bg-[#FAF8F5] px-2.5 text-xs font-semibold text-[#241C15] cursor-pointer focus:outline-none"
-            >
-              <option value="TODOS">Todos los pagos</option>
-              <option value="PAGADO">100% Pagado</option>
-              <option value="PENDIENTE">Con Saldo</option>
-            </select>
-
-            {/* Selector de Filas */}
-            <select
-              value={itemsPerPage}
-              onChange={(e) => {
-                setItemsPerPage(Number(e.target.value))
-                setCurrentPage(1)
-              }}
-              className="h-8.5 rounded-xl border border-[#E2D9CC] bg-[#FAF8F5] px-2.5 text-xs font-semibold text-[#241C15] cursor-pointer focus:outline-none"
-            >
-              <option value={10}>10 pedidos</option>
-              <option value={20}>20 pedidos</option>
-              <option value={50}>50 pedidos</option>
-              <option value={9999}>Todos ({filteredPedidos.length})</option>
-            </select>
-          </div>
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
 
-        {/* Contenido Principal: Tabla Interactiva de Pedidos (Zero-Scroll) */}
-        {filteredPedidos.length === 0 ? (
-          <div className="p-12 text-center border-t border-[#E2D9CC]">
-            <div className="mx-auto w-12 h-12 rounded-2xl bg-[#FAF8F5] flex items-center justify-center text-[#75695D] mb-3">
-              <Boxes className="h-6 w-6" />
-            </div>
-            <h3 className="text-base font-extrabold text-[#241C15]">No se encontraron pedidos</h3>
-            <p className="text-xs text-[#75695D] mt-1 max-w-sm mx-auto">
-              No hay pedidos que coincidan con los filtros seleccionados.
-            </p>
-          </div>
-        ) : (
-          <div className="border-t border-[#E2D9CC]">
-            <div className="w-full">
-              <Table className="w-full">
-                <TableHeader className="bg-[#FAF8F5]/80 border-b border-[#E2D9CC]">
-                  <TableRow className="border-[#E2D9CC] hover:bg-transparent">
-                    <TableHead className="px-4 py-3 text-xs font-bold text-[#75695D]">
-                      <button
-                        onClick={() => handleSort('fecha')}
-                        className="flex items-center gap-1.5 text-xs font-bold text-[#75695D] hover:text-[#241C15] transition-colors cursor-pointer"
-                      >
-                        <span>Pedido & Cliente</span>
-                        {sortField === 'fecha' || sortField === 'codigo' || sortField === 'cliente' ? (
-                          sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-[#A36F4C]" /> : <ArrowDown className="h-3 w-3 text-[#A36F4C]" />
-                        ) : (
-                          <ArrowUpDown className="h-3 w-3 text-[#75695D]/40" />
-                        )}
-                      </button>
-                    </TableHead>
+        {/* Derecha: Controles agrupados */}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {/* Selector de Estado */}
+          <select
+            value={selectedEstadoFilter}
+            onChange={(e) => {
+              setSelectedEstadoFilter(e.target.value)
+              setCurrentPage(1)
+            }}
+            className="h-10 px-3 rounded-xl border border-input bg-background text-xs font-semibold text-foreground flex items-center gap-1.5 hover:bg-secondary/40 cursor-pointer focus:outline-none"
+          >
+            <option value="TODOS">Todos los estados ({pedidos.length})</option>
+            {Object.entries(ESTADOS_CONFIG).map(([stKey, conf]) => {
+              const count = pedidos.filter(p => p.estado === stKey).length
+              return (
+                <option key={stKey} value={stKey}>
+                  {conf.label} ({count})
+                </option>
+              )
+            })}
+          </select>
 
-                    <TableHead className="px-3 py-3 text-xs font-bold text-[#75695D]">
-                      <button
-                        onClick={() => handleSort('cantidad')}
-                        className="flex items-center gap-1 text-xs font-bold text-[#75695D] hover:text-[#241C15] transition-colors cursor-pointer"
-                      >
-                        <span>Productos</span>
-                        {sortField === 'cantidad' ? (
-                          sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-[#A36F4C]" /> : <ArrowDown className="h-3 w-3 text-[#A36F4C]" />
-                        ) : (
-                          <ArrowUpDown className="h-3 w-3 text-[#75695D]/40" />
-                        )}
-                      </button>
-                    </TableHead>
+          {/* Selector de Pagos */}
+          <select
+            value={selectedPagoFilter}
+            onChange={(e) => {
+              setSelectedPagoFilter(e.target.value)
+              setCurrentPage(1)
+            }}
+            className="h-10 px-3 rounded-xl border border-input bg-background text-xs font-semibold text-foreground flex items-center gap-1.5 hover:bg-secondary/40 cursor-pointer focus:outline-none"
+          >
+            <option value="TODOS">Todos los pagos</option>
+            <option value="PAGADO">100% Pagado</option>
+            <option value="PENDIENTE">Con Saldo</option>
+          </select>
 
-                    <TableHead className="w-40 px-3 py-3 text-xs font-bold text-[#75695D]">
-                      Entrega & Destino
-                    </TableHead>
-
-                    <TableHead className="w-36 px-3 py-3 text-center text-xs font-bold text-[#75695D]">
-                      <button
-                        onClick={() => handleSort('estado')}
-                        className="flex items-center justify-center gap-1 text-xs font-bold text-[#75695D] hover:text-[#241C15] transition-colors cursor-pointer mx-auto"
-                      >
-                        <span>Estado</span>
-                        {sortField === 'estado' ? (
-                          sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-[#A36F4C]" /> : <ArrowDown className="h-3 w-3 text-[#A36F4C]" />
-                        ) : (
-                          <ArrowUpDown className="h-3 w-3 text-[#75695D]/40" />
-                        )}
-                      </button>
-                    </TableHead>
-
-                    <TableHead className="w-40 px-4 py-3 text-right">
-                      <button
-                        onClick={() => handleSort('total')}
-                        className="flex items-center gap-1 text-xs font-bold text-[#75695D] hover:text-[#241C15] transition-colors cursor-pointer ml-auto"
-                      >
-                        <span>Total & Saldo</span>
-                        {sortField === 'total' || sortField === 'saldoPendiente' ? (
-                          sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-[#A36F4C]" /> : <ArrowDown className="h-3 w-3 text-[#A36F4C]" />
-                        ) : (
-                          <ArrowUpDown className="h-3 w-3 text-[#75695D]/40" />
-                        )}
-                      </button>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-
-                <TableBody>
-                  {paginatedPedidos.map((p) => {
-                    const isFullyPaid = p.saldoPendiente <= 0
-
-                    return (
-                      <TableRow
-                        key={p.id}
-                        onClick={() => setSelectedPedidoDetail(p)}
-                        className="border-b border-[#E2D9CC]/50 hover:bg-[#FAF8F5]/80 transition-colors cursor-pointer group"
-                      >
-                        {/* 1. Pedido & Cliente */}
-                        <TableCell className="px-4 py-3 align-middle">
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-sm text-[#241C15] group-hover:text-[#A36F4C] transition-colors truncate">
-                                {p.cliente}
-                              </span>
-                              <span className="font-mono font-bold text-xs text-[#A36F4C]">
-                                {p.codigo}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1.5 text-xs text-[#75695D]">
-                              <span>{formatDate(p.fecha)}</span>
-                              {p.dni && (
-                                <>
-                                  <span className="text-[#D4BEA7]">•</span>
-                                  <span className="font-mono text-[11px] font-semibold text-[#A36F4C]">DNI: {p.dni}</span>
-                                </>
-                              )}
-                              {p.canalVenta && (
-                                <>
-                                  <span className="text-[#D4BEA7]">•</span>
-                                  <span>{p.canalVenta}</span>
-                                </>
-                              )}
-                              {p.telefono && (
-                                <>
-                                  <span className="text-[#D4BEA7]">•</span>
-                                  <span className="font-mono">{p.telefono}</span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </TableCell>
-
-                        {/* 2. Productos */}
-                        <TableCell className="px-3 py-3 align-middle">
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-xs text-[#241C15]">
-                                {p.totalItemsCount} {p.totalItemsCount === 1 ? 'unidad' : 'unidades'}
-                              </span>
-                              {p.items.length > 1 && (
-                                <span className="text-xs text-[#75695D]">
-                                  ({p.items.length} productos)
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-xs text-[#75695D] truncate max-w-[240px]">
-                              {p.items.map(it => `${it.nombreProductoSnapshot} (x${it.cantidad})`).join(', ')}
-                            </div>
-                          </div>
-                        </TableCell>
-
-                        {/* 3. Entrega & Destino */}
-                        <TableCell className="w-40 px-3 py-3 align-middle">
-                          <div className="space-y-0.5 text-xs">
-                            {p.diaEntregaPrometida ? (
-                              <div className="font-medium text-[#241C15] truncate">
-                                {p.diaEntregaPrometida}
-                              </div>
-                            ) : (
-                              <div className="text-[#A89F91]">Sin fecha</div>
-                            )}
-                            {p.destinoEnvio && (
-                              <div className="text-[11px] text-[#75695D] truncate">
-                                {p.destinoEnvio}
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
-
-                        {/* 4. Estado con Selector Rápido */}
-                        <TableCell className="w-36 px-3 py-3 align-middle text-center" onClick={(e) => e.stopPropagation()}>
-                          <select
-                            value={p.estado}
-                            onChange={(e) => handleCambiarEstado(p.id, e.target.value as EstadoPedido)}
-                            className={`text-xs font-bold rounded-xl px-2.5 py-1 border cursor-pointer focus:outline-none transition-all ${
-                              p.estado === 'PENDIENTE'
-                                ? 'bg-[#FEF9C3]/70 text-[#854D0E] border-[#FDE047]'
-                                : p.estado === 'PAGO_VALIDADO'
-                                ? 'bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0]'
-                                : p.estado === 'EN_PRODUCCION'
-                                ? 'bg-[#DBEAFE]/70 text-[#1D4ED8] border-[#93C5FD]'
-                                : p.estado === 'LISTO_ENTREGA'
-                                ? 'bg-[#F3E8FF] text-[#7E22CE] border-[#D8B4FE]'
-                                : p.estado === 'ENTREGADO'
-                                ? 'bg-[#EBF7EE] text-[#1E5E3A] border-[#B4E3C0]'
-                                : 'bg-[#F3F4F6] text-[#6B7280] border-[#E5E7EB]'
-                            }`}
-                          >
-                            {Object.entries(ESTADOS_CONFIG).map(([stKey, conf]) => (
-                              <option key={stKey} value={stKey}>
-                                {conf.label}
-                              </option>
-                            ))}
-                          </select>
-                        </TableCell>
-
-                        {/* 5. Total & Liquidación */}
-                        <TableCell className="w-40 px-4 py-3 text-right align-middle">
-                          <div className="space-y-0.5">
-                            <div className="font-mono font-bold text-sm text-[#241C15]">
-                              {formatCurrency(p.total)}
-                            </div>
-                            <div className="flex items-center justify-end gap-1.5 text-[11px]">
-                              {isFullyPaid ? (
-                                <span className="font-semibold text-[#1E5E3A]">
-                                  100% Pagado
-                                </span>
-                              ) : p.montoPagado > 0 ? (
-                                <>
-                                  <span className="font-mono text-[#1E5E3A]">+{formatCurrency(p.montoPagado)}</span>
-                                  <span className="text-[#D4BEA7]">•</span>
-                                  <span className="font-mono text-[#854D0E]">Resta {formatCurrency(p.saldoPendiente)}</span>
-                                </>
-                              ) : (
-                                <span className="text-[#DC2626] font-medium">
-                                  Sin anticipo
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-        )}
-
-        {/* Paginación Unificada en el Footer del Master Card */}
-        {itemsPerPage !== 9999 && totalPages > 1 && (
-          <div className="p-3.5 sm:p-4 bg-[#FAF8F5] border-t border-[#E2D9CC] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-            <span className="text-[#75695D] font-medium">
-              Mostrando{' '}
-              <strong className="text-[#241C15]">{(currentPage - 1) * itemsPerPage + 1}</strong> a{' '}
-              <strong className="text-[#241C15]">
-                {Math.min(currentPage * itemsPerPage, sortedPedidos.length)}
-              </strong>{' '}
-              de <strong className="text-[#241C15]">{sortedPedidos.length}</strong> pedidos
-            </span>
-
-            <div className="flex items-center gap-1.5">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                className="h-8 px-2.5 rounded-xl border-[#E2D9CC] bg-[#FFFFFF] text-[#241C15] font-bold text-xs disabled:opacity-40 cursor-pointer flex items-center gap-1"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-                <span>Anterior</span>
-              </Button>
-
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                <button
-                  key={page}
-                  onClick={() => setCurrentPage(page)}
-                  className={`w-8 h-8 rounded-xl text-xs font-bold font-mono transition-all cursor-pointer ${
-                    currentPage === page
-                      ? 'bg-[#241C15] text-white shadow-xs'
-                      : 'bg-[#FFFFFF] text-[#75695D] hover:bg-[#EAE4DC] border border-[#E2D9CC]'
-                  }`}
-                >
-                  {page}
-                </button>
-              ))}
-
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                className="h-8 px-2.5 rounded-xl border-[#E2D9CC] bg-[#FFFFFF] text-[#241C15] font-bold text-xs disabled:opacity-40 cursor-pointer flex items-center gap-1"
-              >
-                <span>Siguiente</span>
-                <ChevronRight className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </div>
-        )}
+          {/* Navegador Temporal */}
+          <DateFilterControl
+            value={dateRange}
+            onChange={(range) => {
+              setDateRange(range)
+              setCurrentPage(1)
+            }}
+            variant="unified"
+            label="Filtrar Pedidos"
+            align="right"
+          />
+        </div>
       </div>
+
+      {/* ========================================================================= */}
+      {/* 4. REDISEÑO DE TABLA DE PEDIDOS (SEPARACIÓN DE COLUMNAS)                  */}
+      {/* ========================================================================= */}
+      <OrdersTableView
+        pedidos={paginatedPedidos}
+        sortField={sortField}
+        sortOrder={sortOrder}
+        onSort={handleSort}
+        onSelectPedido={(p) => setSelectedPedidoDetail(p)}
+        onCambiarEstado={handleCambiarEstado}
+        onEditPedido={handleOpenEditModal}
+        onEliminarPedido={handleEliminarPedido}
+        onCopyWhatsApp={copyWhatsAppTicket}
+        formatCurrency={formatCurrency}
+        formatDate={formatDate}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        itemsPerPage={itemsPerPage}
+        totalItems={sortedPedidos.length}
+        onPageChange={setCurrentPage}
+        onItemsPerPageChange={(items) => {
+          setItemsPerPage(items)
+          setCurrentPage(1)
+        }}
+      />
 
       {/* ========================================================================= */}
       {/* 5. MODAL: NUEVO PEDIDO MULTIPRODUCTO (1 O MÁS PRODUCTOS)                  */}
@@ -1249,99 +1128,38 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
 
             {/* Modal Form Body */}
             <form onSubmit={handleSubmitNuevoPedido} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-              {/* SECCIÓN 1: DATOS DEL CLIENTE Y ENVÍO */}
-              <div className="space-y-3">
-                <span className="text-xs font-extrabold text-[#A36F4C] uppercase tracking-wider flex items-center gap-1.5 pb-1 border-b border-[#E2D9CC]">
-                  <User className="h-3.5 w-3.5" />
-                  1. Datos del Cliente y Despacho
-                </span>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-[#241C15] font-bold flex items-center gap-1">
-                      <Calendar className="h-3 w-3 text-[#A36F4C]" />
-                      Fecha del Pedido *
-                    </Label>
-                    <Input
-                      type="date"
-                      required
-                      value={formFecha}
-                      onChange={(e) => setFormFecha(e.target.value)}
-                      className="bg-[#FAF8F5] border-[#E2D9CC] text-sm rounded-xl font-mono"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs text-[#241C15] font-bold">Cliente *</Label>
-                    <Input
-                      required
-                      placeholder="Nombre del cliente..."
-                      value={formCliente}
-                      onChange={(e) => setFormCliente(e.target.value)}
-                      className="bg-[#FAF8F5] border-[#E2D9CC] text-sm rounded-xl"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs text-[#241C15] font-bold">DNI / RUC</Label>
-                    <Input
-                      placeholder="Ej: 71234567"
-                      value={formDni}
-                      onChange={(e) => setFormDni(e.target.value)}
-                      maxLength={11}
-                      className="bg-[#FAF8F5] border-[#E2D9CC] text-sm rounded-xl font-mono"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs text-[#241C15] font-bold">Teléfono / WhatsApp</Label>
-                    <Input
-                      placeholder="Ej: 987654321"
-                      value={formTelefono}
-                      onChange={(e) => setFormTelefono(e.target.value)}
-                      className="bg-[#FAF8F5] border-[#E2D9CC] text-sm rounded-xl"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs text-[#241C15] font-bold">Canal de Venta</Label>
-                    <select
-                      value={formCanal}
-                      onChange={(e) => setFormCanal(e.target.value)}
-                      className="w-full h-9 rounded-xl border border-[#E2D9CC] bg-[#FAF8F5] px-3 text-sm text-[#241C15] font-medium"
-                    >
-                      <option value="WhatsApp">WhatsApp</option>
-                      <option value="Instagram">Instagram</option>
-                      <option value="TikTok">TikTok</option>
-                      <option value="Feria">Feria / Presencial</option>
-                      <option value="Recomendación">Recomendación</option>
-                      <option value="Directo">Directo / Tienda</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-[#241C15] font-bold">Fecha / Hora Pactada de Entrega</Label>
-                    <Input
-                      placeholder="Ej: Sábado 18:00, Mañana en Shalom..."
-                      value={formDiaEntrega}
-                      onChange={(e) => setFormDiaEntrega(e.target.value)}
-                      className="bg-[#FAF8F5] border-[#E2D9CC] text-sm rounded-xl"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs text-[#241C15] font-bold">Destino / Dirección / Agencia</Label>
-                    <Input
-                      placeholder="Ej: Shalom Agencia Miraflores, Lima..."
-                      value={formDestino}
-                      onChange={(e) => setFormDestino(e.target.value)}
-                      className="bg-[#FAF8F5] border-[#E2D9CC] text-sm rounded-xl"
-                    />
-                  </div>
-                </div>
-              </div>
+              {/* SECCIÓN 1: DATOS DEL CLIENTE Y DESPACHO (BUSCADOR COMPLETO) */}
+              <OrderCustomerSection
+                clientSelectMode={clientSelectMode}
+                setClientSelectMode={setClientSelectMode}
+                clientesList={clientesList}
+                selectedClientOption={selectedClientOption}
+                onSelectClient={handleSelectClient}
+                onClearSelectedClient={handleClearSelectedClient}
+                onSwitchToNewClient={handleSwitchToNewClient}
+                clientSearchTerm={clientSearchTerm}
+                setClientSearchTerm={setClientSearchTerm}
+                isClientDropdownOpen={isClientDropdownOpen}
+                setIsClientDropdownOpen={setIsClientDropdownOpen}
+                filteredClientOptions={filteredClientOptions}
+                similarExistingClient={similarExistingClient}
+                formFecha={formFecha}
+                setFormFecha={setFormFecha}
+                formCliente={formCliente}
+                setFormCliente={setFormCliente}
+                formDni={formDni}
+                setFormDni={setFormDni}
+                formTelefono={formTelefono}
+                setFormTelefono={setFormTelefono}
+                formCanal={formCanal}
+                setFormCanal={setFormCanal}
+                formDestino={formDestino}
+                setFormDestino={setFormDestino}
+                formDiaEntrega={formDiaEntrega}
+                setFormDiaEntrega={setFormDiaEntrega}
+                isRegisteringClientInline={isRegisteringClientInline}
+                onRegisterClientInline={handleRegisterClientInline}
+              />
 
               {/* SECCIÓN 2: LISTA DE PRODUCTOS DINÁMICA */}
               <div className="space-y-3">
@@ -1611,299 +1429,22 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
       )}
 
       {/* ========================================================================= */}
-      {/* 6. MODAL: DETALLE Y TICKET DE PEDIDO (PRINT / WHATSAPP / ABONOS)          */}
+      {/* 6. MODAL: DETALLE Y TICKET DE PEDIDO (OrderDetailsModal / OrderViewDialog) */}
       {/* ========================================================================= */}
-      {selectedPedidoDetail && (
-        <div className="fixed inset-0 isolate z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 animate-in fade-in duration-200">
-          <div className="bg-[#FFFFFF] border border-[#D4BEA7] rounded-3xl shadow-2xl max-w-3xl w-full max-h-[94vh] sm:max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-            {/* Modal Header */}
-            <div className="bg-[#FAF8F5] border-b border-[#E2D9CC] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge className="bg-[#241C15] text-white font-mono font-black text-xs px-2.5 py-0.5 rounded-lg">
-                    {selectedPedidoDetail.codigo}
-                  </Badge>
-                  <h3 className="text-lg font-black text-[#241C15]">
-                    Pedido de {selectedPedidoDetail.cliente}
-                  </h3>
-                </div>
-                <p className="text-xs text-[#75695D] mt-0.5">
-                  Fecha: {formatDate(selectedPedidoDetail.fecha)} • Canal: {selectedPedidoDetail.canalVenta || 'WhatsApp'}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 flex-wrap self-end sm:self-auto">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleOpenEditModal(selectedPedidoDetail)}
-                  className="h-8 px-3 rounded-xl border-[#D4BEA7] bg-[#FDF6E2] hover:bg-[#F9ECC4] text-[#8C6D1F] font-extrabold text-xs cursor-pointer flex items-center gap-1.5"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  <span>Editar Pedido</span>
-                </Button>
-
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => copyWhatsAppTicket(selectedPedidoDetail)}
-                  className="h-8 px-3 rounded-xl border-[#B4E3C0] bg-[#EBF7EE] text-[#1E5E3A] font-extrabold text-xs cursor-pointer flex items-center gap-1.5"
-                >
-                  <Share2 className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Copiar p/ WhatsApp</span>
-                  <span className="sm:hidden">WhatsApp</span>
-                </Button>
-
-                <button
-                  onClick={() => setSelectedPedidoDetail(null)}
-                  className="p-1.5 rounded-xl hover:bg-[#EAE4DC] text-[#75695D] hover:text-[#241C15] transition-colors cursor-pointer"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Modal Content */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
-              {/* Notificación de copiado */}
-              {copiedNotification && (
-                <div className="p-3 bg-[#EBF7EE] border border-[#B4E3C0] text-[#1E5E3A] rounded-xl text-xs font-bold text-center animate-in fade-in">
-                  ¡Resumen del ticket copiado al portapapeles listo para enviar por WhatsApp!
-                </div>
-              )}
-
-              {/* Grid Info Cliente, Fecha, Pago & Despacho */}
-              <div className="grid grid-cols-2 sm:grid-cols-6 gap-2.5 p-3.5 bg-[#FAF8F5] rounded-2xl border border-[#E2D9CC] text-xs">
-                <div>
-                  <span className="text-[10px] text-[#75695D] block">Cliente:</span>
-                  <strong className="text-[#241C15] font-extrabold">{selectedPedidoDetail.cliente}</strong>
-                  {selectedPedidoDetail.dni && (
-                    <span className="text-[10px] text-[#A36F4C] font-mono font-bold block">
-                      DNI: {selectedPedidoDetail.dni}
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <span className="text-[10px] text-[#75695D] block">Fecha Pedido:</span>
-                  <strong className="text-[#241C15] font-mono flex items-center gap-1">
-                    <Calendar className="h-3 w-3 text-[#A36F4C]" />
-                    {formatDate(selectedPedidoDetail.fecha)}
-                  </strong>
-                </div>
-                <div>
-                  <span className="text-[10px] text-[#75695D] block">Teléfono:</span>
-                  <strong className="text-[#241C15]">{selectedPedidoDetail.telefono || '—'}</strong>
-                </div>
-                <div>
-                  <span className="text-[10px] text-[#75695D] block">Medio de Pago:</span>
-                  <strong className="text-[#1E5E3A] flex items-center gap-1 font-black">
-                    <CreditCard className="h-3 w-3 text-[#1E5E3A]" />
-                    {selectedPedidoDetail.metodoPago || (selectedPedidoDetail.pagos?.[0]?.metodoPago) || 'YAPE'}
-                  </strong>
-                </div>
-                <div>
-                  <span className="text-[10px] text-[#75695D] block">Entrega Pactada:</span>
-                  <strong className="text-[#241C15]">{selectedPedidoDetail.diaEntregaPrometida || '—'}</strong>
-                </div>
-                <div>
-                  <span className="text-[10px] text-[#75695D] block">Destino / Envío:</span>
-                  <strong className="text-[#241C15]">{selectedPedidoDetail.destinoEnvio || 'Tienda'}</strong>
-                </div>
-              </div>
-
-              {/* Notas del Pedido si existen */}
-              {selectedPedidoDetail.notas && (
-                <div className="p-3 bg-[#FAF8F5] rounded-xl border border-[#E2D9CC] text-xs flex items-start gap-2">
-                  <span className="font-bold text-[#633E20] shrink-0">Notas / Instrucciones:</span>
-                  <span className="text-[#241C15]">{selectedPedidoDetail.notas}</span>
-                </div>
-              )}
-
-              {/* Lista Detallada de Productos */}
-              <div className="space-y-2.5">
-                <span className="text-xs font-extrabold text-[#633E20] uppercase tracking-wider block">
-                  Productos Asignados al Pedido ({selectedPedidoDetail.items.length})
-                </span>
-
-                <div className="border border-[#E2D9CC] rounded-2xl overflow-hidden w-full">
-                  <Table className="w-full">
-                    <TableHeader className="bg-[#FAF8F5]">
-                      <TableRow className="border-[#E2D9CC]">
-                        <TableHead className="text-xs font-extrabold text-[#241C15]">Producto</TableHead>
-                        <TableHead className="text-xs font-extrabold text-[#241C15] text-center">Cant.</TableHead>
-                        <TableHead className="text-xs font-extrabold text-[#241C15] text-right">P. Unit</TableHead>
-                        <TableHead className="text-xs font-extrabold text-[#241C15] text-right">Subtotal</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody className="text-xs">
-                      {selectedPedidoDetail.items.map((it) => (
-                        <TableRow key={it.id} className="border-[#E2D9CC]">
-                          <TableCell className="font-bold text-[#241C15]">
-                            {it.nombreProductoSnapshot}
-                            {it.personalizacion && (
-                              <span className="text-[10px] text-[#75695D] block font-normal italic">
-                                Nota: {it.personalizacion}
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-center font-bold">{it.cantidad}</TableCell>
-                          <TableCell className="text-right font-mono">{formatCurrency(it.precioUnitario)}</TableCell>
-                          <TableCell className="text-right font-mono font-extrabold text-[#241C15]">
-                            {formatCurrency(it.subtotal)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-
-                      {selectedPedidoDetail.costoEnvio > 0 && (
-                        <TableRow className="border-[#E2D9CC] bg-[#FAF8F5]/40 font-semibold">
-                          <TableCell colSpan={4} className="text-right text-[#75695D]">
-                            Costo de Envío / Flete:
-                          </TableCell>
-                          <TableCell className="text-right font-mono">
-                            {formatCurrency(selectedPedidoDetail.costoEnvio)}
-                          </TableCell>
-                        </TableRow>
-                      )}
-
-                      <TableRow className="bg-[#FAF8F5] border-t-2 border-[#E2D9CC] font-black text-sm">
-                        <TableCell colSpan={4} className="text-right text-[#241C15]">
-                          TOTAL PEDIDO:
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-[#1E5E3A]">
-                          {formatCurrency(selectedPedidoDetail.total)}
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-
-              {/* Historial de Abonos y Pagos */}
-              <div className="space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                  <span className="text-xs font-extrabold text-[#1E5E3A] uppercase tracking-wider flex items-center gap-1.5">
-                    <CreditCard className="h-3.5 w-3.5" />
-                    Historial de Abonos Recibidos ({selectedPedidoDetail.pagos.length})
-                  </span>
-                  <span className="text-xs font-mono font-bold text-[#75695D]">
-                    Saldo Restante:{' '}
-                    <strong className="text-[#8C6D1F]">S/ {selectedPedidoDetail.saldoPendiente.toFixed(2)}</strong>
-                  </span>
-                </div>
-
-                {selectedPedidoDetail.pagos.length > 0 ? (
-                  <div className="space-y-2">
-                    {selectedPedidoDetail.pagos.map((pg, idx) => (
-                      <div
-                        key={pg.id}
-                        className="p-3 rounded-xl bg-[#EBF7EE]/40 border border-[#B4E3C0] flex items-center justify-between text-xs gap-2"
-                      >
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-extrabold text-[#1E5E3A]">Abono #{idx + 1}</span>
-                            <Badge variant="outline" className="text-[9px] bg-white border-[#B4E3C0] text-[#1E5E3A]">
-                              {pg.metodoPago} • {pg.tipo}
-                            </Badge>
-                          </div>
-                          <span className="text-[11px] text-[#75695D] block mt-0.5">
-                            {formatDate(pg.fecha)} {pg.notas ? `• ${pg.notas}` : ''}
-                          </span>
-                        </div>
-                        <span className="font-mono font-black text-sm text-[#1E5E3A] flex-shrink-0">
-                          +{formatCurrency(pg.monto)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-[#75695D] italic">No se han registrado pagos para este pedido.</p>
-                )}
-
-                {/* Formulario para Agregar Nuevo Abono */}
-                {selectedPedidoDetail.saldoPendiente > 0 && (
-                  <form onSubmit={handleRegistrarAbono} className="p-3.5 rounded-2xl bg-[#FAF8F5] border border-[#E2D9CC] space-y-3">
-                    <span className="text-xs font-bold text-[#241C15] block">
-                      + Registrar Nuevo Abono a este Pedido
-                    </span>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                      <div className="space-y-1">
-                        <Label className="text-[10px] text-[#75695D] font-bold">Monto (S/) *</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          required
-                          placeholder={selectedPedidoDetail.saldoPendiente.toFixed(2)}
-                          value={abonoMonto}
-                          onFocus={(e) => e.target.select()}
-                          onChange={(e) => setAbonoMonto(e.target.value)}
-                          className="h-8 bg-[#FFFFFF] border-[#E2D9CC] text-xs font-mono font-bold"
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <Label className="text-[10px] text-[#75695D] font-bold">Método de Pago</Label>
-                        <select
-                          value={abonoMetodo}
-                          onChange={(e) => setAbonoMetodo(e.target.value)}
-                          className="w-full h-8 rounded-lg border border-[#E2D9CC] bg-[#FFFFFF] px-2 text-xs font-bold"
-                        >
-                          <option value="YAPE">Yape</option>
-                          <option value="PLIN">Plin</option>
-                          <option value="BCP">BCP</option>
-                          <option value="BBVA">BBVA</option>
-                          <option value="EFECTIVO">Efectivo</option>
-                        </select>
-                      </div>
-
-                      <div className="space-y-1">
-                        <Label className="text-[10px] text-[#75695D] font-bold">Tipo de Abono</Label>
-                        <select
-                          value={abonoTipo}
-                          onChange={(e) => setAbonoTipo(e.target.value)}
-                          className="w-full h-8 rounded-lg border border-[#E2D9CC] bg-[#FFFFFF] px-2 text-xs font-bold"
-                        >
-                          <option value="SALDO_ENTREGA">Liquidación / Saldo Final</option>
-                          <option value="ABONO">Abono Parcial</option>
-                          <option value="ANTICIPO">Anticipo</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
-                      <Input
-                        placeholder="Nota o número de operación (opcional)..."
-                        value={abonoNotas}
-                        onChange={(e) => setAbonoNotas(e.target.value)}
-                        className="h-8 bg-[#FFFFFF] border-[#E2D9CC] text-xs flex-1 rounded-lg"
-                      />
-                      <Button
-                        type="submit"
-                        size="sm"
-                        disabled={isSubmittingAbono}
-                        className="h-8 px-4 bg-[#1E5E3A] hover:bg-[#16462B] text-white font-extrabold text-xs rounded-lg cursor-pointer flex-shrink-0"
-                      >
-                        {isSubmittingAbono ? 'Guardando...' : 'Registrar Abono'}
-                      </Button>
-                    </div>
-                  </form>
-                )}
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="bg-[#FAF8F5] border-t border-[#E2D9CC] p-4 flex justify-end">
-              <Button
-                variant="outline"
-                onClick={() => setSelectedPedidoDetail(null)}
-                className="px-5 h-9 text-xs font-bold border-[#E2D9CC] bg-[#FFFFFF] hover:bg-[#EAE4DC] text-[#241C15] rounded-xl cursor-pointer w-full sm:w-auto"
-              >
-                Cerrar
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <OrderDetailsModal
+        isOpen={!!selectedPedidoDetail}
+        pedido={selectedPedidoDetail}
+        onClose={() => setSelectedPedidoDetail(null)}
+        onEdit={(p) => {
+          setSelectedPedidoDetail(null)
+          handleOpenEditModal(p)
+        }}
+        onPedidoUpdated={(updated) => {
+          setPedidos(prev => prev.map(p => p.id === updated.id ? updated : p))
+          setSelectedPedidoDetail(updated)
+        }}
+        productos={productos}
+      />
 
       {/* ========================================================================= */}
       {/* 7. MODAL: EDITAR / MANTENIMIENTO DE PEDIDO                                */}
@@ -1941,14 +1482,38 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
 
             {/* Modal Form Body */}
             <form onSubmit={handleSubmitEditPedido} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-              {/* SECCIÓN 1: ESTADO Y DATOS DEL CLIENTE */}
-              <div className="space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-1 border-b border-[#E2D9CC] gap-2">
-                  <span className="text-xs font-extrabold text-[#A36F4C] uppercase tracking-wider flex items-center gap-1.5">
-                    <User className="h-3.5 w-3.5" />
-                    1. Estado y Datos del Cliente
-                  </span>
-
+              {/* SECCIÓN 1: ESTADO Y DATOS DEL CLIENTE (BUSCADOR COMPLETO) */}
+              <OrderCustomerSection
+                clientSelectMode={clientSelectMode}
+                setClientSelectMode={setClientSelectMode}
+                clientesList={clientesList}
+                selectedClientOption={selectedClientOption}
+                onSelectClient={handleSelectClient}
+                onClearSelectedClient={handleClearSelectedClient}
+                onSwitchToNewClient={handleSwitchToNewClient}
+                clientSearchTerm={clientSearchTerm}
+                setClientSearchTerm={setClientSearchTerm}
+                isClientDropdownOpen={isClientDropdownOpen}
+                setIsClientDropdownOpen={setIsClientDropdownOpen}
+                filteredClientOptions={filteredClientOptions}
+                similarExistingClient={similarExistingClient}
+                formFecha={formFecha}
+                setFormFecha={setFormFecha}
+                formCliente={formCliente}
+                setFormCliente={setFormCliente}
+                formDni={formDni}
+                setFormDni={setFormDni}
+                formTelefono={formTelefono}
+                setFormTelefono={setFormTelefono}
+                formCanal={formCanal}
+                setFormCanal={setFormCanal}
+                formDestino={formDestino}
+                setFormDestino={setFormDestino}
+                formDiaEntrega={formDiaEntrega}
+                setFormDiaEntrega={setFormDiaEntrega}
+                isRegisteringClientInline={isRegisteringClientInline}
+                onRegisterClientInline={handleRegisterClientInline}
+                headerExtra={
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-[#75695D]">Estado:</span>
                     <select
@@ -1963,103 +1528,17 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos }: Pedid
                       ))}
                     </select>
                   </div>
-                </div>
+                }
+              />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-[#241C15] font-bold flex items-center gap-1">
-                      <Calendar className="h-3 w-3 text-[#A36F4C]" />
-                      Fecha del Pedido *
-                    </Label>
-                    <Input
-                      type="date"
-                      required
-                      value={formFecha}
-                      onChange={(e) => setFormFecha(e.target.value)}
-                      className="bg-[#FAF8F5] border-[#E2D9CC] text-sm rounded-xl font-mono"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs text-[#241C15] font-bold">Cliente *</Label>
-                    <Input
-                      required
-                      placeholder="Nombre del cliente..."
-                      value={formCliente}
-                      onChange={(e) => setFormCliente(e.target.value)}
-                      className="bg-[#FAF8F5] border-[#E2D9CC] text-sm rounded-xl"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs text-[#241C15] font-bold">DNI / RUC</Label>
-                    <Input
-                      placeholder="Ej: 71234567"
-                      value={formDni}
-                      onChange={(e) => setFormDni(e.target.value)}
-                      maxLength={11}
-                      className="bg-[#FAF8F5] border-[#E2D9CC] text-sm rounded-xl font-mono"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs text-[#241C15] font-bold">Teléfono / WhatsApp</Label>
-                    <Input
-                      placeholder="Ej: 987654321"
-                      value={formTelefono}
-                      onChange={(e) => setFormTelefono(e.target.value)}
-                      className="bg-[#FAF8F5] border-[#E2D9CC] text-sm rounded-xl"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs text-[#241C15] font-bold">Canal de Venta</Label>
-                    <select
-                      value={formCanal}
-                      onChange={(e) => setFormCanal(e.target.value)}
-                      className="w-full h-9 rounded-xl border border-[#E2D9CC] bg-[#FAF8F5] px-3 text-sm text-[#241C15] font-medium"
-                    >
-                      <option value="WhatsApp">WhatsApp</option>
-                      <option value="Instagram">Instagram</option>
-                      <option value="TikTok">TikTok</option>
-                      <option value="Feria">Feria / Presencial</option>
-                      <option value="Recomendación">Recomendación</option>
-                      <option value="Directo">Directo / Tienda</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-[#241C15] font-bold">Fecha / Hora Pactada de Entrega</Label>
-                    <Input
-                      placeholder="Ej: Sábado 18:00, Mañana en Shalom..."
-                      value={formDiaEntrega}
-                      onChange={(e) => setFormDiaEntrega(e.target.value)}
-                      className="bg-[#FAF8F5] border-[#E2D9CC] text-sm rounded-xl"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs text-[#241C15] font-bold">Destino / Dirección / Agencia</Label>
-                    <Input
-                      placeholder="Ej: Shalom Agencia Miraflores, Lima..."
-                      value={formDestino}
-                      onChange={(e) => setFormDestino(e.target.value)}
-                      className="bg-[#FAF8F5] border-[#E2D9CC] text-sm rounded-xl"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs text-[#241C15] font-bold">Notas del Pedido</Label>
-                  <Input
-                    placeholder="Notas internas, indicaciones de acabado, etc..."
-                    value={formNotas}
-                    onChange={(e) => setFormNotas(e.target.value)}
-                    className="bg-[#FAF8F5] border-[#E2D9CC] text-sm rounded-xl"
-                  />
-                </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-[#241C15] font-bold">Notas del Pedido</Label>
+                <Input
+                  placeholder="Notas internas, indicaciones de acabado, etc..."
+                  value={formNotas}
+                  onChange={(e) => setFormNotas(e.target.value)}
+                  className="bg-[#FAF8F5] border-[#E2D9CC] text-sm rounded-xl"
+                />
               </div>
 
               {/* SECCIÓN 2: LISTA DE PRODUCTOS DINÁMICA */}
