@@ -6,22 +6,21 @@ import { usePathname } from 'next/navigation'
 import { 
   LayoutDashboard, 
   ShoppingBag, 
-  Wallet, 
+  History, 
   DollarSign, 
   ArrowUpRight, 
   ArrowDownLeft, 
-  Tag, 
-  PackageSearch, 
+  Dices,
   Layers, 
-  ChevronDown, 
   X,
   Users,
+  Coins,
   Globe,
-  Store
+  Receipt,
+  WalletCards
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getNavLiveMetrics } from '@/actions/nav'
-import { useBusiness } from '@/context/BusinessContext'
 import { BusinessSwitcher } from '@/components/layout/BusinessSwitcher'
 
 interface SidebarProps {
@@ -31,43 +30,30 @@ interface SidebarProps {
 
 export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
   const pathname = usePathname()
-  const { config } = useBusiness()
 
-  // Dynamic live counters
-  const [metrics, setMetrics] = useState<{ pedidosPendientes: number }>({
-    pedidosPendientes: 0
+  const [metrics, setMetrics] = useState<{
+    pedidosPendientes: number
+    juegosBajoStock: number
+  }>({
+    pedidosPendientes: 0,
+    juegosBajoStock: 0
   })
 
-  // Active section matchers
-  const isDashboard = pathname === '/'
-  const isPedidos = pathname.startsWith('/pedidos') || pathname.startsWith('/ventas')
-  const isFinanzasSection = pathname.startsWith('/finanzas') || pathname.startsWith('/inversiones')
-  const isClientes = pathname.startsWith('/clientes')
-  const isTiendaWeb = pathname.startsWith('/tienda-web')
-  const isTiendaSection = pathname.startsWith('/catalogo') || isClientes || isTiendaWeb
-
-  // Collapsible Accordion states
-  const [tiendaOpen, setTiendaOpen] = useState(true)
-  const [finanzasOpen, setFinanzasOpen] = useState(true)
-
-  // Fetch live metrics on mount and when pathname changes
   useEffect(() => {
     let mounted = true
-
     const fetchMetrics = async () => {
       try {
         const data = await getNavLiveMetrics('BG')
         if (mounted) {
-          setMetrics({ pedidosPendientes: data.pedidosPendientes || 0 })
+          setMetrics({
+            pedidosPendientes: data.pedidosPendientes || 0,
+            juegosBajoStock: (data as any).juegosBajoStock || 0
+          })
         }
-      } catch (err) {
-        // fail silently
-      }
+      } catch (err) {}
     }
-
     fetchMetrics()
-    const interval = setInterval(fetchMetrics, 25000)
-
+    const interval = setInterval(fetchMetrics, 30000)
     return () => {
       mounted = false
       clearInterval(interval)
@@ -75,20 +61,51 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
   }, [pathname])
 
   const handleLinkClick = () => {
-    if (isMobile && onClose) {
-      onClose()
-    }
+    if (isMobile && onClose) onClose()
+  }
+
+  const navItem = (href: string, label: string, icon: React.ReactNode, count?: number, isWarning?: boolean) => {
+    const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href)
+
+    return (
+      <Link
+        href={href}
+        onClick={handleLinkClick}
+        className={cn(
+          'flex items-center justify-between rounded-lg px-2.5 h-8 text-xs font-medium transition-all group select-none',
+          isActive
+            ? 'bg-muted text-foreground font-semibold shadow-2xs'
+            : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+        )}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className={cn('shrink-0 transition-colors', isActive ? 'text-foreground' : 'text-muted-foreground/70 group-hover:text-foreground')}>
+            {icon}
+          </span>
+          <span className="truncate">{label}</span>
+        </div>
+
+        {count !== undefined && count > 0 && (
+          <span className={cn(
+            'text-[10px] font-mono px-1.5 py-0.2 rounded border tabular-nums',
+            isWarning 
+              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 font-semibold'
+              : 'bg-muted/60 text-muted-foreground border-border/40'
+          )}>
+            {count}
+          </span>
+        )}
+      </Link>
+    )
   }
 
   return (
     <aside className={cn(
-      'flex h-full flex-col bg-[#F8F6F2] text-[#75695D] select-none transition-colors border-r border-[#E2D9CC]',
+      'flex h-full flex-col bg-sidebar text-muted-foreground select-none transition-colors border-r border-border/40',
       isMobile ? 'w-full' : 'w-64'
     )}>
-      {/* ========================================================================= */}
-      {/* 1. ENCABEZADO (BRAND HEADER / BUSINESS SWITCHER)                         */}
-      {/* ========================================================================= */}
-      <div className="p-3 border-b border-[#E2D9CC] bg-[#F8F6F2] flex-shrink-0 flex items-center justify-between gap-2">
+      {/* Brand Header */}
+      <div className="p-3 border-b border-border/40 bg-sidebar flex-shrink-0 flex items-center justify-between gap-2">
         <div className="flex-1 min-w-0">
           <BusinessSwitcher />
         </div>
@@ -97,264 +114,60 @@ export function Sidebar({ isMobile = false, onClose }: SidebarProps) {
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl text-[#75695D] hover:text-[#241C15] hover:bg-[#EFE5D8] border border-[#E2D9CC] transition-colors cursor-pointer shrink-0"
-            title="Cerrar Menú"
+            className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
           >
             <X className="h-4 w-4" />
           </button>
         )}
       </div>
 
-      {/* ========================================================================= */}
-      {/* 2. LISTA DE NAVEGACIÓN REESTRUCTURADA                                      */}
-      {/* ========================================================================= */}
-      <div className="flex-1 overflow-y-auto py-3 px-3 space-y-1 bg-[#F8F6F2] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      {/* Navigation List - Clean & Categorized */}
+      <div className="flex-1 overflow-y-auto py-3 px-3 space-y-4 [&::-webkit-scrollbar]:hidden">
         
-        {/* ======================================================================= */}
-        {/* PRIMERA JERARQUÍA: DASHBOARD Y PEDIDOS                                  */}
-        {/* ======================================================================= */}
-        
-        {/* DASHBOARD PRINCIPAL */}
-        <Link
-          href="/"
-          onClick={handleLinkClick}
-          className={cn(
-            'flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold transition-all duration-150 min-h-[38px]',
-            isDashboard
-              ? 'bg-white text-[#241C15] shadow-xs border border-[#E2D9CC]'
-              : 'text-[#75695D] hover:bg-[#F1ECE4] hover:text-[#241C15]'
-          )}
-        >
-          <LayoutDashboard className={cn('h-4 w-4 shrink-0', isDashboard ? 'text-indigo-600' : 'text-[#75695D]')} />
-          <span>Dashboard</span>
-        </Link>
-
-        {/* PEDIDOS */}
-        <Link
-          href="/pedidos"
-          onClick={handleLinkClick}
-          className={cn(
-            'flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold transition-all duration-150 min-h-[38px]',
-            isPedidos
-              ? 'bg-white text-[#241C15] shadow-xs border border-[#E2D9CC]'
-              : 'text-[#75695D] hover:bg-[#F1ECE4] hover:text-[#241C15]'
-          )}
-        >
-          <ShoppingBag className={cn('h-4 w-4 shrink-0', isPedidos ? 'text-[#A36F4C]' : 'text-[#75695D]')} />
-          <span>Pedidos</span>
-
-          {metrics.pedidosPendientes > 0 && (
-            <span className="ml-auto text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
-              {metrics.pedidosPendientes}
-            </span>
-          )}
-        </Link>
-
-        {/* ======================================================================= */}
-        {/* SECCIÓN TIENDA: PRODUCTOS, CATEGORÍAS, CLIENTES, CONFIGURACIÓN          */}
-        {/* ======================================================================= */}
-        <div className="pt-2">
-          <button
-            type="button"
-            onClick={() => setTiendaOpen(!tiendaOpen)}
-            className={cn(
-              'w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all duration-150 cursor-pointer min-h-[36px]',
-              isTiendaSection
-                ? 'text-[#241C15] font-black'
-                : 'text-[#75695D] hover:bg-[#F1ECE4] hover:text-[#241C15]'
-            )}
-          >
-            <div className="flex items-center gap-2.5">
-              <Store className={cn('h-4 w-4 shrink-0', isTiendaSection ? 'text-indigo-600' : 'text-[#75695D]')} />
-              <span>Tienda</span>
-            </div>
-            <ChevronDown 
-              className={cn(
-                'h-3.5 w-3.5 transition-transform duration-200 text-[#75695D]',
-                tiendaOpen ? 'rotate-0' : '-rotate-90'
-              )} 
-            />
-          </button>
-
-          {tiendaOpen && (
-            <div className="pl-3 space-y-0.5 my-1 border-l border-[#E2D9CC] ml-3 transition-all">
-              {/* PRODUCTOS */}
-              <Link
-                href="/catalogo"
-                onClick={handleLinkClick}
-                className={cn(
-                  'flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-150 min-h-[32px]',
-                  pathname === '/catalogo'
-                    ? 'bg-white text-[#241C15] font-bold shadow-xs border border-[#E2D9CC]'
-                    : 'text-[#75695D] hover:bg-[#F1ECE4] hover:text-[#241C15]'
-                )}
-              >
-                <PackageSearch className="h-3.5 w-3.5 shrink-0 text-[#75695D]" />
-                <span>Juegos de Mesa</span>
-              </Link>
-
-              {/* CATEGORÍAS */}
-              <Link
-                href="/catalogo/categorias"
-                onClick={handleLinkClick}
-                className={cn(
-                  'flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-150 min-h-[32px]',
-                  pathname === '/catalogo/categorias'
-                    ? 'bg-white text-[#241C15] font-bold shadow-xs border border-[#E2D9CC]'
-                    : 'text-[#75695D] hover:bg-[#F1ECE4] hover:text-[#241C15]'
-                )}
-              >
-                <Layers className="h-3.5 w-3.5 shrink-0 text-[#75695D]" />
-                <span>Categorías</span>
-              </Link>
-
-              {/* CLIENTES */}
-              <Link
-                href="/clientes"
-                onClick={handleLinkClick}
-                className={cn(
-                  'flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-150 min-h-[32px]',
-                  isClientes
-                    ? 'bg-white text-[#241C15] font-bold shadow-xs border border-[#E2D9CC]'
-                    : 'text-[#75695D] hover:bg-[#F1ECE4] hover:text-[#241C15]'
-                )}
-              >
-                <Users className="h-3.5 w-3.5 shrink-0 text-[#A36F4C]" />
-                <span>Clientes</span>
-              </Link>
-
-              {/* CONFIGURACIÓN DE LA TIENDA WEB */}
-              <Link
-                href="/tienda-web"
-                onClick={handleLinkClick}
-                className={cn(
-                  'flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-150 min-h-[32px]',
-                  isTiendaWeb
-                    ? 'bg-white text-[#241C15] font-bold shadow-xs border border-[#E2D9CC]'
-                    : 'text-[#75695D] hover:bg-[#F1ECE4] hover:text-[#241C15]'
-                )}
-              >
-                <Globe className="h-3.5 w-3.5 shrink-0 text-[#75695D]" />
-                <span>Configuración</span>
-                <span className="ml-auto text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
-                  Live
-                </span>
-              </Link>
-            </div>
-          )}
+        {/* OPERACIONES */}
+        <div className="space-y-0.5">
+          <span className="px-2 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/60 font-medium block pb-1">
+            Operaciones
+          </span>
+          {navItem('/', 'Dashboard', <LayoutDashboard className="h-3.5 w-3.5" />)}
+          {navItem('/pedidos', 'Pedidos', <ShoppingBag className="h-3.5 w-3.5" />, metrics.pedidosPendientes)}
+          {navItem('/ventas', 'Historial Ventas', <Receipt className="h-3.5 w-3.5" />)}
+          {navItem('/clientes', 'Clientes', <Users className="h-3.5 w-3.5" />)}
         </div>
 
-        {/* ======================================================================= */}
-        {/* SECCIÓN FINANZAS                                                         */}
-        {/* ======================================================================= */}
-        <div className="pt-2">
-          <button
-            type="button"
-            onClick={() => setFinanzasOpen(!finanzasOpen)}
-            className={cn(
-              'w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all duration-150 cursor-pointer min-h-[36px]',
-              isFinanzasSection
-                ? 'text-[#241C15] font-black'
-                : 'text-[#75695D] hover:bg-[#F1ECE4] hover:text-[#241C15]'
-            )}
-          >
-            <div className="flex items-center gap-2.5">
-              <Wallet className={cn('h-4 w-4 shrink-0', isFinanzasSection ? 'text-[#A36F4C]' : 'text-[#75695D]')} />
-              <span>Finanzas</span>
-            </div>
-            <ChevronDown 
-              className={cn(
-                'h-3.5 w-3.5 transition-transform duration-200 text-[#75695D]',
-                finanzasOpen ? 'rotate-0' : '-rotate-90'
-              )} 
-            />
-          </button>
-
-          {finanzasOpen && (
-            <div className="pl-3 space-y-0.5 my-1 border-l border-[#E2D9CC] ml-3 transition-all">
-              {/* FLUJO DE CAJA */}
-              <Link
-                href="/finanzas/flujo-caja"
-                onClick={handleLinkClick}
-                className={cn(
-                  'flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-150 min-h-[32px]',
-                  pathname === '/finanzas/flujo-caja' || pathname === '/finanzas' || pathname === '/inversiones' || pathname === '/inversiones/flujo-caja'
-                    ? 'bg-white text-[#241C15] font-bold shadow-xs border border-[#E2D9CC]'
-                    : 'text-[#75695D] hover:bg-[#F1ECE4] hover:text-[#241C15]'
-                )}
-              >
-                <DollarSign className="h-3.5 w-3.5 shrink-0 text-[#1E5E3A]" />
-                <span>Flujo de Caja</span>
-              </Link>
-
-              {/* INGRESOS */}
-              <Link
-                href="/finanzas/ingresos"
-                onClick={handleLinkClick}
-                className={cn(
-                  'flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-150 min-h-[32px]',
-                  pathname === '/finanzas/ingresos'
-                    ? 'bg-white text-[#241C15] font-bold shadow-xs border border-[#E2D9CC]'
-                    : 'text-[#75695D] hover:bg-[#F1ECE4] hover:text-[#241C15]'
-                )}
-              >
-                <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-[#1E5E3A]" />
-                <span>Ingresos</span>
-              </Link>
-
-              {/* EGRESOS */}
-              <Link
-                href="/finanzas/egresos"
-                onClick={handleLinkClick}
-                className={cn(
-                  'flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-150 min-h-[32px]',
-                  pathname === '/finanzas/egresos'
-                    ? 'bg-white text-[#241C15] font-bold shadow-xs border border-[#E2D9CC]'
-                    : 'text-[#75695D] hover:bg-[#F1ECE4] hover:text-[#241C15]'
-                )}
-              >
-                <ArrowDownLeft className="h-3.5 w-3.5 shrink-0 text-[#A36F4C]" />
-                <span>Egresos</span>
-              </Link>
-
-              {/* TAGS DE GASTO */}
-              <Link
-                href="/finanzas/tags"
-                onClick={handleLinkClick}
-                className={cn(
-                  'flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-150 min-h-[32px]',
-                  pathname === '/finanzas/tags'
-                    ? 'bg-white text-[#241C15] font-bold shadow-xs border border-[#E2D9CC]'
-                    : 'text-[#75695D] hover:bg-[#F1ECE4] hover:text-[#241C15]'
-                )}
-              >
-                <Tag className="h-3.5 w-3.5 shrink-0 text-[#75695D]" />
-                <span>Tags de Gasto</span>
-              </Link>
-            </div>
-          )}
+        {/* CATÁLOGO & STOCK */}
+        <div className="space-y-0.5">
+          <span className="px-2 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/60 font-medium block pb-1">
+            Catálogo & Stock
+          </span>
+          {navItem('/catalogo', 'Juegos de Mesa', <Dices className="h-3.5 w-3.5" />, metrics.juegosBajoStock, true)}
+          {navItem('/catalogo/categorias', 'Categorías', <Layers className="h-3.5 w-3.5" />)}
+          {navItem('/tienda-web', 'Tienda Web', <Globe className="h-3.5 w-3.5" />)}
         </div>
+
+        {/* FINANZAS & SOCIOS */}
+        <div className="space-y-0.5">
+          <span className="px-2 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/60 font-medium block pb-1">
+            Finanzas & Socios
+          </span>
+          {navItem('/finanzas/rentabilidad', 'Rentabilidad & Sueldos', <Coins className="h-3.5 w-3.5 text-indigo-500" />)}
+          {navItem('/finanzas', 'Flujo de Caja', <DollarSign className="h-3.5 w-3.5" />)}
+          {navItem('/historico-mensual', 'Histórico Mensual', <History className="h-3.5 w-3.5" />)}
+          {navItem('/finanzas/ingresos', 'Ingresos Directos', <ArrowUpRight className="h-3.5 w-3.5" />)}
+          {navItem('/finanzas/egresos', 'Egresos & Compras', <ArrowDownLeft className="h-3.5 w-3.5" />)}
+          {navItem('/finanzas/cierres', 'Cierres de Caja', <WalletCards className="h-3.5 w-3.5" />)}
+        </div>
+
       </div>
 
-      {/* ========================================================================= */}
-      {/* 3. FOOTER DEL NEGOCIO                                                     */}
-      {/* ========================================================================= */}
-      <div className="mt-auto p-3 border-t border-[#E2D9CC] bg-[#F8F6F2] flex-shrink-0">
-        <div className="rounded-xl border border-[#E2D9CC] p-2.5 flex items-center gap-2.5 bg-white shadow-xs">
-          <div
-            className="h-7 w-7 rounded-lg flex items-center justify-center font-black text-xs shrink-0 bg-indigo-600 text-white"
-          >
-            BG
-          </div>
-          <div className="flex-1 min-w-0">
-            <span className="font-bold text-xs text-[#241C15] truncate block leading-tight">
-              {config.name}
-            </span>
-            <span className="text-[10px] text-[#75695D] truncate block leading-tight">
-              {config.badge} • Activo
-            </span>
-          </div>
-          <div className="w-2 h-2 rounded-full bg-[#1E5E3A] shrink-0" title="En línea" />
+      {/* Footer Minimalista */}
+      <div className="mt-auto p-3 border-t border-border/40 bg-sidebar/50">
+        <div className="flex items-center justify-between text-xs px-2 py-1 text-muted-foreground">
+          <span className="font-mono text-[10px] uppercase tracking-wider">NOVA BG</span>
+          <span className="flex items-center gap-1 font-mono text-[10px]">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            Online
+          </span>
         </div>
       </div>
     </aside>

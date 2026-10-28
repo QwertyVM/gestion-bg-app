@@ -17,8 +17,7 @@ import {
   PieChart, 
   Pie, 
   Cell, 
-  Legend, 
-  ReferenceLine 
+  Legend
 } from 'recharts'
 import { 
   TrendingUp, 
@@ -30,28 +29,26 @@ import {
   ShoppingBag, 
   Package, 
   ArrowUpRight,
-  Dice5
+  Dice5,
+  Dices
 } from 'lucide-react'
 
 import { DateFilterControl } from '@/components/ui/DateFilterControl'
 import { DateRange, getPresetDateRange, isDateInRange, formatFechaEvolucion, MESES_ES } from '@/lib/date-utils'
+import { formatCurrency, getInitials, formatClienteNombre } from '@/lib/utils'
+import { ExecutiveKpiRows } from '@/components/dashboard/ExecutiveKpiRows'
+import { OperationalPulseBar } from '@/components/dashboard/OperationalPulseBar'
+import { AcquisitionChannelsCard } from '@/components/dashboard/AcquisitionChannelsCard'
+import { KpiExplainerModal } from '@/components/ui/KpiExplainerModal'
 
 // Paleta de colores minimalista para gastos (Donut Chart)
-const DONUT_COLORS = ['#7C5835', '#A36F4C', '#B8A99A', '#059669', '#3B82F6', '#8C6239']
-
-// Obtener iniciales de un nombre
-function getInitials(name: string) {
-  if (!name) return 'CL'
-  const parts = name.trim().split(/\s+/)
-  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase()
-  return (parts[0][0] + parts[1][0]).toUpperCase()
-}
+const DONUT_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#0ea5e9', '#8b5cf6', '#ec4899']
 
 // Configuración de los 3 gráficos analíticos para Juegos de Mesa
 const EVOLUCION_CONFIG = {
   MARGEN: {
     title: 'Margen Real por Pedido',
-    description: 'Facturación vendida vs. costo base de adquisición por día'
+    description: 'Facturación vendida vs. costo de adquisición por día'
   },
   FLUJO: {
     title: 'Flujo Diario de Caja',
@@ -78,43 +75,42 @@ function MargenTooltip({ active, payload, label }: any) {
     const pedidos = data.pedidosDetalle || []
 
     return (
-      <div className="bg-white border border-[#E5DCD3] rounded-xl shadow-lg p-3 min-w-[220px] max-w-[280px] text-xs font-sans">
-        <div className="flex items-center justify-between border-b border-[#F5EFEB] pb-1.5 mb-2">
-          <span className="font-bold text-[#1F2937]">{formatFechaEvolucion(label, true)}</span>
-          <span className="text-[10px] font-semibold text-[#059669] bg-[#ECFDF5] px-1.5 py-0.5 rounded">
+      <div className="bg-popover border border-border/80 rounded-xl shadow-lg p-3 min-w-[220px] max-w-[280px] text-xs font-sans text-popover-foreground">
+        <div className="flex items-center justify-between border-b border-border/50 pb-1.5 mb-2">
+          <span className="font-bold text-foreground">{formatFechaEvolucion(label, true)}</span>
+          <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
             {margenPct}% margen
           </span>
         </div>
-        <div className="space-y-1.5 text-[#6B7280]">
+        <div className="space-y-1.5 text-muted-foreground">
           <div className="flex justify-between items-center">
             <span>Venta Total:</span>
-            <span className="font-mono font-bold text-[#1F2937]">S/ {venta.toFixed(2)}</span>
+            <span className="font-mono font-bold text-foreground">{formatCurrency(venta)}</span>
           </div>
           <div className="flex justify-between items-center">
-            <span>Costo Base / Compra:</span>
-            <span className="font-mono font-medium text-[#75695D]">S/ {costo.toFixed(2)}</span>
+            <span>Costo Stock / Compra:</span>
+            <span className="font-mono font-medium text-foreground/80">{formatCurrency(costo)}</span>
           </div>
-          <div className="flex justify-between items-center pt-1.5 border-t border-[#F5EFEB] font-bold">
-            <span className="text-[#059669]">Utilidad Neta:</span>
-            <span className="font-mono text-sm text-[#059669]">
-              +S/ {utilidad.toFixed(2)}
+          <div className="flex justify-between items-center pt-1.5 border-t border-border/40 font-bold">
+            <span className="text-emerald-600 dark:text-emerald-400">Utilidad Comercial:</span>
+            <span className="font-mono text-sm text-emerald-600 dark:text-emerald-400">
+              +{formatCurrency(utilidad)}
             </span>
           </div>
 
-          {/* Desglose de pedidos del día con Cliente y Juego de Mesa */}
           {pedidos.length > 0 && (
-            <div className="pt-2 border-t border-[#F5EFEB] space-y-1">
-              <div className="text-[10px] uppercase font-bold text-[#9CA3AF] tracking-wider">
+            <div className="pt-2 border-t border-border/40 space-y-1">
+              <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
                 {pedidos.length === 1 ? 'Detalle del pedido' : `${pedidos.length} pedidos registrados`}:
               </div>
               {pedidos.map((p: any, idx: number) => (
                 <div key={idx} className="flex justify-between items-start text-[11px] gap-2 py-0.5">
                   <div className="truncate min-w-0 flex-1">
-                    <span className="font-semibold text-[#1F2937] block truncate">{p.cliente}</span>
-                    <span className="text-[#6B7280] block text-[10px] truncate">{p.producto}</span>
+                    <span className="font-semibold text-foreground block truncate">{formatClienteNombre(p.cliente)}</span>
+                    <span className="text-muted-foreground block text-[10px] truncate">{p.producto}</span>
                   </div>
-                  <span className="font-mono font-bold text-[#1F2937] shrink-0">
-                    S/ {Number(p.total).toFixed(2)}
+                  <span className="font-mono font-bold text-foreground shrink-0">
+                    {formatCurrency(Number(p.total))}
                   </span>
                 </div>
               ))}
@@ -137,40 +133,36 @@ function FlujoCajaTooltip({ active, payload, label }: any) {
     const isNegative = balanceNeto < 0
 
     return (
-      <div className="bg-white border border-[#E5DCD3] rounded-xl shadow-lg p-3 min-w-[210px] text-xs font-sans">
-        <div className="flex items-center justify-between border-b border-[#F5EFEB] pb-1.5 mb-2">
-          <span className="font-bold text-[#1F2937]">{formatFechaEvolucion(label, true)}</span>
-          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-            isNegative ? 'text-[#DC2626] bg-[#FEF2F2]' : 'text-[#059669] bg-[#ECFDF5]'
+      <div className="bg-popover border border-border/80 rounded-xl shadow-lg p-3 min-w-[210px] text-xs font-sans text-popover-foreground">
+        <div className="flex items-center justify-between border-b border-border/50 pb-1.5 mb-2">
+          <span className="font-bold text-foreground">{formatFechaEvolucion(label, true)}</span>
+          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+            isNegative 
+              ? 'text-rose-600 dark:text-rose-400 bg-rose-500/10 border-rose-500/20' 
+              : 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
           }`}>
             {isNegative ? 'Déficit Día' : 'Superávit Día'}
           </span>
         </div>
-        <div className="space-y-1.5 text-[#6B7280]">
+        <div className="space-y-1.5 text-muted-foreground">
           <div className="flex justify-between items-center">
             <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-[#059669]" />
-              Entradas (Cobros & Inyecciones):
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              Entradas en Caja:
             </span>
-            <span className="font-mono font-bold text-[#059669]">S/ {entradas.toFixed(2)}</span>
+            <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(entradas)}</span>
           </div>
-          {Number(data.inyeccionesTotal || 0) > 0 && (
-            <div className="flex justify-between items-center pl-3.5 text-[11px] text-[#059669]">
-              <span>↳ De inyecciones:</span>
-              <span className="font-mono font-medium">S/ {Number(data.inyeccionesTotal).toFixed(2)}</span>
-            </div>
-          )}
           <div className="flex justify-between items-center">
             <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-[#DC2626]" />
-              Egresos & Compras (Salidas):
+              <span className="w-2 h-2 rounded-full bg-rose-500" />
+              Salidas / Egresos:
             </span>
-            <span className="font-mono font-bold text-[#DC2626]">S/ {salidas.toFixed(2)}</span>
+            <span className="font-mono font-bold text-rose-600 dark:text-rose-400">{formatCurrency(salidas)}</span>
           </div>
-          <div className="flex justify-between items-center pt-1.5 border-t border-[#F5EFEB] font-bold">
-            <span className={isNegative ? 'text-[#DC2626]' : 'text-[#059669]'}>Balance Neto:</span>
-            <span className={`font-mono text-sm ${isNegative ? 'text-[#DC2626]' : 'text-[#059669]'}`}>
-              {isNegative ? `-S/ ${Math.abs(balanceNeto).toFixed(2)}` : `+S/ ${balanceNeto.toFixed(2)}`}
+          <div className="flex justify-between items-center pt-1.5 border-t border-border/40 font-bold">
+            <span>Balance del Día:</span>
+            <span className={`font-mono text-sm ${isNegative ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+              {isNegative ? '-' : '+'}{formatCurrency(Math.abs(balanceNeto))}
             </span>
           </div>
         </div>
@@ -180,8 +172,8 @@ function FlujoCajaTooltip({ active, payload, label }: any) {
   return null
 }
 
-// Tooltip 3: Curva Acumulada
-function CurvaAcumuladaTooltip({ active, payload, label }: any) {
+// Tooltip 3: Curva Acumulativa
+function AcumuladoTooltip({ active, payload, label }: any) {
   if (active && payload && payload.length) {
     const data = payload[0]?.payload || {}
     const cobranza = Number(data.ingresosAcum || 0)
@@ -190,34 +182,36 @@ function CurvaAcumuladaTooltip({ active, payload, label }: any) {
     const isNegative = balance < 0
 
     return (
-      <div className="bg-white border border-[#E5DCD3] rounded-xl shadow-lg p-3 min-w-[220px] text-xs font-sans">
-        <div className="flex items-center justify-between border-b border-[#F5EFEB] pb-1.5 mb-2">
-          <span className="font-bold text-[#1F2937]">{formatFechaEvolucion(label, true)}</span>
-          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-            isNegative ? 'text-[#DC2626] bg-[#FEF2F2]' : 'text-[#059669] bg-[#ECFDF5]'
+      <div className="bg-popover border border-border/80 rounded-xl shadow-lg p-3 min-w-[210px] text-xs font-sans text-popover-foreground">
+        <div className="flex items-center justify-between border-b border-border/50 pb-1.5 mb-2">
+          <span className="font-bold text-foreground">{formatFechaEvolucion(label, true)}</span>
+          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+            isNegative 
+              ? 'text-rose-600 dark:text-rose-400 bg-rose-500/10 border-rose-500/20' 
+              : 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
           }`}>
-            {isNegative ? 'Déficit Acumulado' : 'Superávit Acumulado'}
+            {isNegative ? 'Balance Negativo' : 'Balance Favorable'}
           </span>
         </div>
-        <div className="space-y-1.5 text-[#6B7280]">
+        <div className="space-y-1.5 text-muted-foreground">
           <div className="flex justify-between items-center">
             <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-[#059669]" />
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
               Cobranza Acumulada:
             </span>
-            <span className="font-mono font-bold text-[#059669]">S/ {cobranza.toFixed(2)}</span>
+            <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(cobranza)}</span>
           </div>
           <div className="flex justify-between items-center">
             <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-[#DC2626]" />
+              <span className="w-2 h-2 rounded-full bg-rose-500" />
               Gastos Acumulados:
             </span>
-            <span className="font-mono font-bold text-[#DC2626]">S/ {gastos.toFixed(2)}</span>
+            <span className="font-mono font-bold text-rose-600 dark:text-rose-400">{formatCurrency(gastos)}</span>
           </div>
-          <div className="flex justify-between items-center pt-1.5 border-t border-[#F5EFEB] font-bold">
-            <span className={isNegative ? 'text-[#DC2626]' : 'text-[#059669]'}>Balance a la Fecha:</span>
-            <span className={`font-mono text-sm ${isNegative ? 'text-[#DC2626]' : 'text-[#059669]'}`}>
-              {isNegative ? `-S/ ${Math.abs(balance).toFixed(2)}` : `+S/ ${balance.toFixed(2)}`}
+          <div className="flex justify-between items-center pt-1.5 border-t border-border/40 font-bold">
+            <span className={isNegative ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}>Balance a la Fecha:</span>
+            <span className={`font-mono text-sm ${isNegative ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+              {isNegative ? '-' : '+'}{formatCurrency(Math.abs(balance))}
             </span>
           </div>
         </div>
@@ -287,6 +281,7 @@ interface DashboardClientProps {
   rawVentas?: any[]
   rawInversiones?: any[]
   rawIngresosDirectos?: any[]
+  rawProductos?: any[]
 }
 
 export function DashboardClient({ 
@@ -298,18 +293,17 @@ export function DashboardClient({
   topArticulos: initialTopArticulos = [],
   rawVentas = [],
   rawInversiones = [],
-  rawIngresosDirectos = []
+  rawIngresosDirectos = [],
+  rawProductos = []
 }: DashboardClientProps) {
   const router = useRouter()
   // Default al historial completo
   const [dateRange, setDateRange] = useState<DateRange>(() => getPresetDateRange('TODO'))
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [distribucionMode, setDistribucionMode] = useState<'VS' | 'CATEGORIAS'>('VS')
   const [evolucionTab, setEvolucionTab] = useState<'MARGEN' | 'FLUJO' | 'ACUMULADO' | 'TODOS'>('MARGEN')
   const [soloDiasConVentas, setSoloDiasConVentas] = useState(true)
   const [rankingArticulosMode, setRankingArticulosMode] = useState<'RENTABILIDAD' | 'VOLUMEN'>('RENTABILIDAD')
-
-  const formatCurrency = (val: number) => `S/ ${val.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const [selectedKpiExplainer, setSelectedKpiExplainer] = useState<string | null>(null)
 
   // 1. Filtrar ventas por rango de fecha
   const filteredVentas = useMemo(() => {
@@ -332,7 +326,15 @@ export function DashboardClient({
   // 4. Calcular KPIs dinámicamente según el período seleccionado
   const dynamicKpis = useMemo(() => {
     if (rawVentas.length === 0 && rawInversiones.length === 0) {
-      return initialKpis
+      const gNeta = initialKpis.gananciaNeta
+      const iVentas = initialKpis.ingresosVentas
+      const tCobrado = initialKpis.totalCobradoVentas
+      return {
+        ...initialKpis,
+        costoDirectoTotal: initialKpis.costoFabricacionTotal,
+        tasaCobranza: iVentas > 0 ? (tCobrado / iVentas) * 100 : 100,
+        margenUnitarioPromedio: initialKpis.ticketPromedio > 0 ? (gNeta / Math.max(1, filteredVentas.length)) : 0
+      }
     }
 
     const ingresosVentas = filteredVentas.reduce((sum: number, v: any) => sum + Number(v.total || 0), 0)
@@ -347,13 +349,12 @@ export function DashboardClient({
     const gananciaNeta = ingresosVentas - costoFabricacionTotal
     const margenPorcentaje = costoFabricacionTotal > 0 ? (gananciaNeta / costoFabricacionTotal) * 100 : 0
 
-    // Cobranzas efectivas dentro del período (considera abonos recibidos en el período de cualquier pedido)
+    // Cobranzas efectivas dentro del período
     const totalCobradoVentas = rawVentas.reduce((sum: number, v: any) => {
       if (Array.isArray(v.pagos) && v.pagos.length > 0) {
         const pagosEnRango = v.pagos.filter((p: any) => isDateInRange(p.fecha, dateRange.from, dateRange.to))
         return sum + pagosEnRango.reduce((pSum: number, p: any) => pSum + Number(p.monto || 0), 0)
       }
-      // Fallback si no hay array de pagos pero la fecha de venta está en rango
       if (isDateInRange(v.fecha, dateRange.from, dateRange.to)) {
         return sum + Number(v.montoPagado || 0)
       }
@@ -365,11 +366,17 @@ export function DashboardClient({
     const ticketPromedio = filteredVentas.length > 0 ? ingresosVentas / filteredVentas.length : 0
     const totalIngresosDirectos = filteredIngresosDirectos.reduce((sum: number, i: any) => sum + Number(i.monto || 0), 0)
 
+    const tasaCobranza = ingresosVentas > 0 ? (totalCobradoVentas / ingresosVentas) * 100 : 100
+    const margenUnitarioPromedio = filteredVentas.length > 0 ? gananciaNeta / filteredVentas.length : 0
+
     return {
       ingresosVentas,
       costoFabricacionTotal,
+      costoDirectoTotal: costoFabricacionTotal,
       gananciaNeta,
       margenPorcentaje,
+      tasaCobranza,
+      margenUnitarioPromedio,
       totalCobradoVentas,
       saldoPorCobrar,
       egresosTotales,
@@ -378,27 +385,62 @@ export function DashboardClient({
     }
   }, [filteredVentas, filteredInversiones, filteredIngresosDirectos, dateRange, rawVentas, rawInversiones, initialKpis])
 
-  // 5. Saldo y liquidez en caja calculada para el período
+  // 5. Saldo y liquidez en caja
   const gasto = useMemo(() => {
     const saldoActualCaja = Math.max(0, (dynamicKpis.totalCobradoVentas + dynamicKpis.totalIngresosDirectos) - dynamicKpis.egresosTotales)
-    const gastoDisponibleHoy = saldoActualCaja
-    const margenUnitarioPromedio = dynamicKpis.ticketPromedio > 0 ? (dynamicKpis.gananciaNeta / Math.max(1, filteredVentas.length)) : 0
+    const totalBlindadoMes = initialCapacidadGasto?.totalBlindadoMes || 350.00
+    const gastoDisponibleHoy = Math.max(0, saldoActualCaja - totalBlindadoMes)
+    const margenUnitarioPromedio = dynamicKpis.margenUnitarioPromedio
     const pedidosProyectadosMes = filteredVentas.length
     const gananciaProyectadaMes = dynamicKpis.gananciaNeta
-    const gastoDisponibleProyectado = saldoActualCaja
+    const gastoDisponibleProyectado = gastoDisponibleHoy
 
     return {
       saldoActualCaja,
-      totalBlindadoMes: 0,
+      totalBlindadoMes,
       cuotaPrestamoMensual: 0,
       reservaCapexMensual: 0,
-      gastosFijosTaller: 0,
+      gastosFijosTaller: totalBlindadoMes,
       gastoDisponibleHoy,
       gastoDisponibleProyectado,
       pedidosProyectadosMes,
       gananciaProyectadaMes
     }
-  }, [dynamicKpis, filteredVentas.length])
+  }, [dynamicKpis, filteredVentas.length, initialCapacidadGasto])
+
+  // 5.b Punto de Equilibrio Board Games
+  const breakEven = useMemo(() => {
+    const totalFijos = gasto.totalBlindadoMes || 350.00
+    const ganancia = dynamicKpis.gananciaNeta || 0
+    const cobertura = totalFijos > 0 ? (ganancia / totalFijos) * 100 : 100
+    const margenUnit = dynamicKpis.margenUnitarioPromedio > 0 ? dynamicKpis.margenUnitarioPromedio : 32
+    const pedidosEquilibrio = Math.max(1, Math.ceil(totalFijos / margenUnit))
+    const pedidosFaltantes = Math.max(0, pedidosEquilibrio - filteredVentas.length)
+    const superavit = ganancia - totalFijos
+
+    return {
+      totalFijos,
+      cobertura,
+      pedidosEquilibrio,
+      pedidosFaltantes,
+      superavit
+    }
+  }, [gasto.totalBlindadoMes, dynamicKpis.gananciaNeta, dynamicKpis.margenUnitarioPromedio, filteredVentas.length])
+
+  // Total de unidades de juegos en el período
+  const totalPiezasPeriodo = useMemo(() => {
+    return filteredVentas.reduce((sum: number, v: any) => sum + Number(v.cantidad || 1), 0)
+  }, [filteredVentas])
+
+  // Capital inmovilizado en stock (31 títulos en almacén)
+  const capitalInmovilizado = useMemo(() => {
+    if (!rawProductos || rawProductos.length === 0) return 0
+    return rawProductos.reduce((sum: number, p: any) => {
+      const stock = Number(p.stock || 0)
+      const costo = Number(p.costoBase || 0)
+      return sum + (stock * costo)
+    }, 0)
+  }, [rawProductos])
 
   // 6. Métricas y datos para los 3 gráficos financieros
   const metricasEvolucion = useMemo(() => {
@@ -413,7 +455,6 @@ export function DashboardClient({
       inyeccionesTotal?: number
     }> = {}
 
-    // A. Inicializar todos los días del período para rangos continuos (ej. semana o mes de hasta 60 días)
     if (dateRange.from && dateRange.to) {
       const [startYear, startMonth, startDay] = dateRange.from.split('-').map(Number)
       const [endYear, endMonth, endDay] = dateRange.to.split('-').map(Number)
@@ -433,14 +474,14 @@ export function DashboardClient({
             entradas: 0,
             salidas: 0,
             pedidosCount: 0,
-            pedidosDetalle: []
+            pedidosDetalle: [],
+            inyeccionesTotal: 0
           }
           curr.setDate(curr.getDate() + 1)
         }
       }
     }
 
-    // B. Procesar ventas base (Facturación y Costo en la fecha de la venta)
     filteredVentas.forEach((v: any) => {
       const vDate = v.fecha ? String(v.fecha).split('T')[0] : ''
       if (!vDate) return
@@ -453,37 +494,33 @@ export function DashboardClient({
           entradas: 0,
           salidas: 0,
           pedidosCount: 0,
-          pedidosDetalle: []
+          pedidosDetalle: [],
+          inyeccionesTotal: 0
         }
       }
 
-      const totalVenta = Number(v.total || 0)
-      const costoBaseUnit = v.costoBaseSnapshot != null && Number(v.costoBaseSnapshot) > 0 
+      const total = Number(v.total || 0)
+      const costoUnit = v.costoBaseSnapshot != null && Number(v.costoBaseSnapshot) > 0 
         ? Number(v.costoBaseSnapshot) 
         : (Number(v.producto?.costoBase) || 0)
-      const costoProd = costoBaseUnit * Number(v.cantidad || 1)
+      const costoTotal = costoUnit * Number(v.cantidad || 1)
+      const utilidad = total - costoTotal
 
-      timelineMap[vDate].ventaTotal += totalVenta
-      timelineMap[vDate].costoProduccion += costoProd
-      timelineMap[vDate].utilidad += (totalVenta - costoProd)
+      timelineMap[vDate].ventaTotal += total
+      timelineMap[vDate].costoProduccion += costoTotal
+      timelineMap[vDate].utilidad += utilidad
       timelineMap[vDate].pedidosCount += 1
 
-      const clienteName = v.cliente || 'Cliente'
-      const prodName = v.nombreProductoSnapshot || v.producto?.nombreModelo || 'Juego'
+      const clienteNombre = v.cliente || 'Cliente'
+      const productoNombre = v.nombreProductoSnapshot || v.producto?.nombreModelo || 'Juego de Mesa'
       if (!timelineMap[vDate].pedidosDetalle) timelineMap[vDate].pedidosDetalle = []
-      timelineMap[vDate].pedidosDetalle.push({
-        cliente: clienteName,
-        producto: prodName,
-        total: totalVenta
-      })
+      timelineMap[vDate].pedidosDetalle!.push({ cliente: clienteNombre, producto: productoNombre, total })
 
-      // Si la venta no tiene pagos registrados, sumar como entrada en su fecha
       if (!v.pagos || v.pagos.length === 0) {
         timelineMap[vDate].entradas += Number(v.montoPagado != null ? v.montoPagado : v.total)
       }
     })
 
-    // C. Procesar cobros reales (entradas) según la fecha efectiva del pago
     rawVentas.forEach((v: any) => {
       if (Array.isArray(v.pagos) && v.pagos.length > 0) {
         v.pagos.forEach((p: any) => {
@@ -507,7 +544,6 @@ export function DashboardClient({
       }
     })
 
-    // D. Procesar egresos e inversiones (salidas) según la fecha del gasto
     filteredInversiones.forEach((inv: any) => {
       const invDate = inv.fecha ? String(inv.fecha).split('T')[0] : ''
       if (!invDate) return
@@ -526,7 +562,6 @@ export function DashboardClient({
       timelineMap[invDate].salidas += Number(inv.costoTotal || 0)
     })
 
-    // E. Procesar ingresos directos / inyecciones de dinero (entradas) según su fecha
     filteredIngresosDirectos.forEach((ing: any) => {
       const ingDate = ing.fecha ? String(ing.fecha).split('T')[0] : ''
       if (!ingDate) return
@@ -549,7 +584,6 @@ export function DashboardClient({
       timelineMap[ingDate].inyeccionesTotal = (timelineMap[ingDate].inyeccionesTotal || 0) + montoIng
     })
 
-    // F. Convertir a array ordenado y calcular acumulados
     const sortedDates = Object.keys(timelineMap).sort()
     let acumCobranzas = 0
     let acumGastos = 0
@@ -582,52 +616,19 @@ export function DashboardClient({
     })
   }, [filteredVentas, filteredInversiones, filteredIngresosDirectos, rawVentas, dateRange])
 
-  // 7. Datos de Distribución de Egresos vs Ingresos (Donut Chart)
-  const comparativaIngresosGastos = useMemo(() => {
-    const ingresos = dynamicKpis.totalCobradoVentas + dynamicKpis.totalIngresosDirectos
-    const egresos = dynamicKpis.egresosTotales
-    const balance = ingresos - egresos
-    const totalFlujo = ingresos + egresos
-
-    const ingresosPct = totalFlujo > 0 ? Number(((ingresos / totalFlujo) * 100).toFixed(1)) : 0
-    const egresosPct = totalFlujo > 0 ? Number(((egresos / totalFlujo) * 100).toFixed(1)) : 0
-
-    const dataDonut = [
-      { name: 'Cobranza en Caja', value: Number(ingresos.toFixed(2)), color: '#059669', pct: ingresosPct },
-      { name: 'Gastos & Egresos', value: Number(egresos.toFixed(2)), color: '#DC2626', pct: egresosPct }
-    ].filter(d => d.value > 0)
-
+  // Sparklines para ExecutiveKpiRows
+  const sparklineData = useMemo(() => {
+    if (!metricasEvolucion || metricasEvolucion.length === 0) return undefined
+    const slice = metricasEvolucion.slice(-14)
     return {
-      ingresos,
-      egresos,
-      balance,
-      ingresosPct,
-      egresosPct,
-      dataDonut
+      ventas: slice.map(d => d.ventaTotal),
+      margen: slice.map(d => Math.max(0, d.utilidad)),
+      caja: slice.map(d => d.ingresosAcum),
+      cobertura: slice.map(d => Math.min(100, Math.round((d.utilidad / (breakEven.totalFijos || 1)) * 100)))
     }
-  }, [dynamicKpis])
+  }, [metricasEvolucion, breakEven.totalFijos])
 
-  // 7b. Datos de Inversión por Categoría Dinámico (Donut Chart en modo Categorías)
-  const graficoInversionDinamico = useMemo(() => {
-    if (rawInversiones.length === 0) return initialGraficoInversion
-
-    const categoriasMap: Record<string, number> = {}
-    filteredInversiones.forEach((inv: any) => {
-      const cat = inv.categoria || 'OTROS'
-      categoriasMap[cat] = (categoriasMap[cat] || 0) + Number(inv.costoTotal || 0)
-    })
-
-    return Object.entries(categoriasMap).map(([name, value]) => ({
-      name,
-      value: Number(value.toFixed(2))
-    })).filter(c => c.value > 0)
-  }, [filteredInversiones, rawInversiones, initialGraficoInversion])
-
-  const totalEgresosCalculado = useMemo(() => {
-    return graficoInversionDinamico.reduce((sum, item) => sum + item.value, 0)
-  }, [graficoInversionDinamico])
-
-  // 8. Top 5 Clientes Dinámico según el período seleccionado
+  // Top 5 Clientes Dinámico
   const topClientesDinamico = useMemo(() => {
     if (rawVentas.length === 0) return initialTopClientes
 
@@ -708,7 +709,7 @@ export function DashboardClient({
       })
   }, [filteredVentas, rawVentas, dynamicKpis.ingresosVentas, initialTopClientes])
 
-  // 9. Top 5 Juegos en el período seleccionado (Rentabilidad vs Volumen)
+  // Top 5 Juegos en el período
   const topArticulosDinamico = useMemo(() => {
     if (rawVentas.length === 0) return initialTopArticulos
 
@@ -728,13 +729,6 @@ export function DashboardClient({
       const nombre = v.nombreProductoSnapshot || v.producto?.nombreModelo || 'Juego'
       const artKey = (v.productoId || nombre).trim().toLowerCase()
       const categoria = v.producto?.lineaCategoria || 'General'
-      const cant = Number(v.cantidad || 1)
-      const sub = Number(v.total || 0)
-
-      const costoBaseUnit = v.costoBaseSnapshot != null && Number(v.costoBaseSnapshot) > 0 
-        ? Number(v.costoBaseSnapshot) 
-        : (Number(v.producto?.costoBase) || 0)
-      const costoProd = costoBaseUnit * cant
 
       if (!articulosMap[artKey]) {
         articulosMap[artKey] = {
@@ -748,21 +742,28 @@ export function DashboardClient({
         }
       }
 
+      const total = Number(v.total || 0)
+      const cant = Number(v.cantidad || 1)
+      const costoUnit = v.costoBaseSnapshot != null && Number(v.costoBaseSnapshot) > 0 
+        ? Number(v.costoBaseSnapshot) 
+        : (Number(v.producto?.costoBase) || 0)
+      const costoTotal = costoUnit * cant
+
+      articulosMap[artKey].totalFacturado += total
       articulosMap[artKey].unidadesVendidas += cant
-      articulosMap[artKey].totalFacturado += sub
-      articulosMap[artKey].costoProduccionTotal += costoProd
+      articulosMap[artKey].costoProduccionTotal += costoTotal
       articulosMap[artKey].pedidosCount += 1
+
       totalUnidades += cant
     })
 
-    const ingresosTotal = dynamicKpis.ingresosVentas
+    const totalFacturadoTotal = dynamicKpis.ingresosVentas
 
     return Object.values(articulosMap)
-      .map((art) => {
-        const gananciaNeta = Number((art.totalFacturado - art.costoProduccionTotal).toFixed(2))
-        const margenPorcentaje = art.totalFacturado > 0 
-          ? Number(((gananciaNeta / art.totalFacturado) * 100).toFixed(1)) 
-          : 0
+      .map(art => {
+        const gananciaNeta = art.totalFacturado - art.costoProduccionTotal
+        const margenPorcentaje = art.costoProduccionTotal > 0 ? (gananciaNeta / art.costoProduccionTotal) * 100 : 0
+        const precioPromedio = art.unidadesVendidas > 0 ? art.totalFacturado / art.unidadesVendidas : 0
 
         return {
           id: art.id,
@@ -770,67 +771,67 @@ export function DashboardClient({
           lineaCategoria: art.lineaCategoria,
           unidadesVendidas: art.unidadesVendidas,
           totalFacturado: Number(art.totalFacturado.toFixed(2)),
-          costoProduccionTotal: Number(art.costoProduccionTotal.toFixed(2)),
-          gananciaNeta,
-          margenPorcentaje,
           pedidosCount: art.pedidosCount,
-          precioPromedio: art.unidadesVendidas > 0 ? Number((art.totalFacturado / art.unidadesVendidas).toFixed(2)) : 0,
+          precioPromedio: Number(precioPromedio.toFixed(2)),
           porcentajeUnidades: totalUnidades > 0 ? Number(((art.unidadesVendidas / totalUnidades) * 100).toFixed(1)) : 0,
-          porcentajeFacturacion: ingresosTotal > 0 ? Number(((art.totalFacturado / ingresosTotal) * 100).toFixed(1)) : 0
+          porcentajeFacturacion: totalFacturadoTotal > 0 ? Number(((art.totalFacturado / totalFacturadoTotal) * 100).toFixed(1)) : 0,
+          costoProduccionTotal: Number(art.costoProduccionTotal.toFixed(2)),
+          gananciaNeta: Number(gananciaNeta.toFixed(2)),
+          margenPorcentaje: Number(margenPorcentaje.toFixed(1))
         }
       })
       .sort((a, b) => {
         if (rankingArticulosMode === 'RENTABILIDAD') {
-          return b.gananciaNeta - a.gananciaNeta || b.totalFacturado - a.totalFacturado
+          return (b.gananciaNeta || 0) - (a.gananciaNeta || 0)
         }
-        return b.unidadesVendidas - a.unidadesVendidas || b.totalFacturado - a.totalFacturado
+        return b.unidadesVendidas - a.unidadesVendidas
       })
       .slice(0, 5)
-  }, [filteredVentas, rawVentas, dynamicKpis.ingresosVentas, initialTopArticulos, rankingArticulosMode])
+  }, [filteredVentas, rawVentas, dynamicKpis.ingresosVentas, rankingArticulosMode, initialTopArticulos])
 
-  // Funciones de renderizado para los 3 gráficos
-  const renderMargenChart = (data: any[], heightClass: string = 'h-full') => {
-    const displayData = soloDiasConVentas ? data.filter(d => d.ventaTotal > 0) : data
-    const chartData = displayData.length > 0 ? displayData : data
+  const renderMargenChart = (data: any[], heightClass: string = 'h-[280px]') => {
+    const chartData = soloDiasConVentas ? data.filter(d => d.ventaTotal > 0) : data
 
     return (
       <div className={`${heightClass} w-full`}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E5DCD3" vertical={false} opacity={0.5} />
+            <CartesianGrid strokeDasharray="3 3" stroke="currentColor" vertical={false} opacity={0.1} />
             <XAxis 
               dataKey="fecha" 
-              stroke="#6B7280" 
+              stroke="currentColor" 
               fontSize={11} 
               tickLine={false} 
-              axisLine={{ stroke: '#E5DCD3' }}
+              axisLine={{ stroke: 'currentColor', opacity: 0.15 }}
               interval={chartData.length <= 10 ? 0 : 'preserveStartEnd'}
               minTickGap={32}
               tickFormatter={(val) => formatFechaEvolucion(val, false)}
               dy={4}
+              className="text-muted-foreground"
             />
             <YAxis 
-              stroke="#6B7280" 
+              stroke="currentColor" 
               fontSize={11} 
               tickLine={false} 
               axisLine={false} 
               tickFormatter={(val) => `${val}`}
+              className="text-muted-foreground"
             />
             <Tooltip content={<MargenTooltip />} />
             <Legend 
               verticalAlign="top"
               content={() => (
-                <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] pb-2 text-[#6B7280]">
+                <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] pb-2 text-muted-foreground">
                   <div className="flex items-center gap-1.5 font-medium">
-                    <span className="w-2.5 h-2.5 bg-[#059669] rounded-xs inline-block" />
-                    <span>Utilidad Neta</span>
+                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-xs inline-block" />
+                    <span>Utilidad Comercial</span>
                   </div>
                   <div className="flex items-center gap-1.5 font-medium">
-                    <span className="w-2.5 h-2.5 bg-[#D1C7BD] rounded-xs inline-block" />
-                    <span>Costo Base / Compra</span>
+                    <span className="w-2.5 h-2.5 bg-muted-foreground/30 rounded-xs inline-block" />
+                    <span>Costo Compra Stock</span>
                   </div>
-                  <div className="flex items-center gap-1.5 font-medium text-[#7C5835]">
-                    <span className="w-3.5 h-0.5 bg-[#7C5835] rounded-full inline-block" />
+                  <div className="flex items-center gap-1.5 font-medium text-indigo-600 dark:text-indigo-400">
+                    <span className="w-3.5 h-0.5 bg-indigo-500 rounded-full inline-block" />
                     <span>Venta Total</span>
                   </div>
                 </div>
@@ -840,15 +841,16 @@ export function DashboardClient({
               dataKey="costoProduccion" 
               name="Costo Base" 
               stackId="venta" 
-              fill="#D1C7BD" 
+              fill="#94a3b8" 
+              opacity={0.4}
               radius={[0, 0, 0, 0]}
               maxBarSize={32}
             />
             <Bar 
               dataKey="utilidad" 
-              name="Utilidad Neta" 
+              name="Utilidad Comercial" 
               stackId="venta" 
-              fill="#059669" 
+              fill="#10b981" 
               radius={[4, 4, 0, 0]}
               maxBarSize={32}
             />
@@ -856,10 +858,10 @@ export function DashboardClient({
               type="monotone" 
               dataKey="ventaTotal" 
               name="Venta Total" 
-              stroke="#7C5835" 
+              stroke="#6366f1" 
               strokeWidth={2} 
-              dot={{ r: 3, fill: '#7C5835', stroke: '#FFFFFF', strokeWidth: 1.5 }}
-              activeDot={{ r: 5, fill: '#7C5835', stroke: '#FFFFFF', strokeWidth: 2 }}
+              dot={{ r: 3, fill: '#6366f1', stroke: '#FFFFFF', strokeWidth: 1.5 }}
+              activeDot={{ r: 5, fill: '#6366f1', stroke: '#FFFFFF', strokeWidth: 2 }}
             />
           </ComposedChart>
         </ResponsiveContainer>
@@ -867,127 +869,111 @@ export function DashboardClient({
     )
   }
 
-  const renderFlujoChart = (data: any[], heightClass: string = 'h-full') => (
+  const renderFlujoChart = (data: any[], heightClass: string = 'h-[280px]') => (
     <div className={`${heightClass} w-full`}>
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5DCD3" vertical={false} opacity={0.5} />
+          <CartesianGrid strokeDasharray="3 3" stroke="currentColor" vertical={false} opacity={0.1} />
           <XAxis 
             dataKey="fecha" 
-            stroke="#6B7280" 
+            stroke="currentColor" 
             fontSize={11} 
             tickLine={false} 
-            axisLine={{ stroke: '#E5DCD3' }}
-            interval={data.length <= 10 ? 0 : 'preserveStartEnd'}
+            axisLine={{ stroke: 'currentColor', opacity: 0.15 }}
             minTickGap={32}
             tickFormatter={(val) => formatFechaEvolucion(val, false)}
             dy={4}
+            className="text-muted-foreground"
           />
           <YAxis 
-            stroke="#6B7280" 
+            stroke="currentColor" 
             fontSize={11} 
             tickLine={false} 
             axisLine={false} 
             tickFormatter={(val) => `${val}`}
+            className="text-muted-foreground"
           />
           <Tooltip content={<FlujoCajaTooltip />} />
           <Legend 
             verticalAlign="top"
             content={() => (
-              <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] pb-2 text-[#6B7280]">
+              <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] pb-2 text-muted-foreground">
                 <div className="flex items-center gap-1.5 font-medium">
-                  <span className="w-2.5 h-2.5 bg-[#059669] rounded-xs inline-block" />
-                  <span>Entradas (Cobros & Inyecciones)</span>
+                  <span className="w-2.5 h-2.5 bg-emerald-500 rounded-xs inline-block" />
+                  <span>Cobros en Caja</span>
                 </div>
                 <div className="flex items-center gap-1.5 font-medium">
-                  <span className="w-2.5 h-2.5 bg-[#DC2626] rounded-xs inline-block" />
+                  <span className="w-2.5 h-2.5 bg-rose-500 rounded-xs inline-block" />
                   <span>Egresos & Compras</span>
-                </div>
-                <div className="flex items-center gap-1.5 font-medium text-[#1F2937]">
-                  <span className="w-3.5 h-0.5 bg-[#1F2937] rounded-full inline-block" />
-                  <span>Balance Neto</span>
                 </div>
               </div>
             )}
           />
-          <ReferenceLine y={0} stroke="#D1D5DB" strokeWidth={1} />
           <Bar 
             dataKey="entradas" 
             name="Entradas" 
-            fill="#059669" 
-            radius={[3, 3, 0, 0]}
-            maxBarSize={22}
+            fill="#10b981" 
+            radius={[4, 4, 0, 0]}
+            maxBarSize={28}
           />
           <Bar 
             dataKey="salidas" 
             name="Salidas" 
-            fill="#DC2626" 
-            radius={[3, 3, 0, 0]}
-            maxBarSize={22}
-          />
-          <Line 
-            type="monotone" 
-            dataKey="balanceNeto" 
-            name="Balance Diario" 
-            stroke="#1F2937" 
-            strokeWidth={2} 
-            dot={{ r: 3, fill: '#1F2937', stroke: '#FFFFFF', strokeWidth: 1.5 }}
-            activeDot={{ r: 5, fill: '#1F2937', stroke: '#FFFFFF', strokeWidth: 2 }}
+            fill="#f43f5e" 
+            radius={[4, 4, 0, 0]}
+            maxBarSize={28}
           />
         </ComposedChart>
       </ResponsiveContainer>
     </div>
   )
 
-  const renderAcumuladoChart = (data: any[], heightClass: string = 'h-full') => (
+  const renderAcumuladoChart = (data: any[], heightClass: string = 'h-[280px]') => (
     <div className={`${heightClass} w-full`}>
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
           <defs>
-            <linearGradient id="colorIngresosAcum" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#059669" stopOpacity={0.25}/>
-              <stop offset="95%" stopColor="#059669" stopOpacity={0.0}/>
+            <linearGradient id="colorIngresos" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#10b981" stopOpacity={0.25}/>
+              <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
             </linearGradient>
-            <linearGradient id="colorGastosAcum" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#DC2626" stopOpacity={0.15}/>
-              <stop offset="95%" stopColor="#DC2626" stopOpacity={0.0}/>
+            <linearGradient id="colorEgresos" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.2}/>
+              <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5DCD3" vertical={false} opacity={0.5} />
+          <CartesianGrid strokeDasharray="3 3" stroke="currentColor" vertical={false} opacity={0.1} />
           <XAxis 
             dataKey="fecha" 
-            stroke="#6B7280" 
+            stroke="currentColor" 
             fontSize={11} 
             tickLine={false} 
-            axisLine={{ stroke: '#E5DCD3' }}
-            interval={data.length <= 10 ? 0 : 'preserveStartEnd'}
+            axisLine={{ stroke: 'currentColor', opacity: 0.15 }}
             minTickGap={32}
             tickFormatter={(val) => formatFechaEvolucion(val, false)}
             dy={4}
+            className="text-muted-foreground"
           />
           <YAxis 
-            stroke="#6B7280" 
+            stroke="currentColor" 
             fontSize={11} 
             tickLine={false} 
             axisLine={false} 
-            tickFormatter={(val) => `S/ ${val}`}
+            tickFormatter={(val) => `${val}`}
+            className="text-muted-foreground"
           />
-          <Tooltip content={<CurvaAcumuladaTooltip />} />
+          <Tooltip content={<AcumuladoTooltip />} />
           <Legend 
             verticalAlign="top"
             content={() => (
-              <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] pb-2 text-[#6B7280]">
-                <div className="flex items-center gap-1.5 font-medium">
-                  <span className="w-2.5 h-2.5 bg-[#059669] rounded-xs inline-block" />
+              <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] pb-2 text-muted-foreground">
+                <div className="flex items-center gap-1.5 font-medium text-emerald-600 dark:text-emerald-400">
+                  <span className="w-3.5 h-0.5 bg-emerald-500 rounded-full inline-block" />
                   <span>Cobranza Acumulada</span>
                 </div>
-                <div className="flex items-center gap-1.5 font-medium">
-                  <span className="w-2.5 h-2.5 bg-[#DC2626] rounded-xs inline-block" />
+                <div className="flex items-center gap-1.5 font-medium text-rose-600 dark:text-rose-400">
+                  <span className="w-3.5 h-0.5 bg-rose-500 rounded-full inline-block" />
                   <span>Gastos Acumulados</span>
-                </div>
-                <div className="flex items-center gap-1.5 font-medium text-[#7C5835]">
-                  <span className="w-3.5 h-0.5 bg-[#7C5835] rounded-full inline-block" />
-                  <span>Balance a la Fecha</span>
                 </div>
               </div>
             )}
@@ -995,27 +981,20 @@ export function DashboardClient({
           <Area 
             type="monotone" 
             dataKey="ingresosAcum" 
-            name="Cobranza Acumulada" 
-            stroke="#059669" 
-            strokeWidth={2.5} 
-            fill="url(#colorIngresosAcum)" 
+            name="Cobranza Acum." 
+            stroke="#10b981" 
+            strokeWidth={2}
+            fillOpacity={1} 
+            fill="url(#colorIngresos)" 
           />
           <Area 
             type="monotone" 
             dataKey="egresosAcum" 
-            name="Gastos Acumulados" 
-            stroke="#DC2626" 
-            strokeWidth={2} 
-            fill="url(#colorGastosAcum)" 
-            strokeDasharray="4 4"
-          />
-          <Line 
-            type="monotone" 
-            dataKey="balanceAcum" 
-            name="Balance Acumulado" 
-            stroke="#7C5835" 
-            strokeWidth={2} 
-            dot={false}
+            name="Gastos Acum." 
+            stroke="#f43f5e" 
+            strokeWidth={2}
+            fillOpacity={1} 
+            fill="url(#colorEgresos)" 
           />
         </ComposedChart>
       </ResponsiveContainer>
@@ -1029,17 +1008,17 @@ export function DashboardClient({
   }
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-300 pb-10 max-w-7xl mx-auto">
+    <div className="space-y-4 animate-in fade-in duration-300 pb-10 max-w-7xl mx-auto">
       {/* ========================================================================= */}
-      {/* 1. HEADER MINIMALISTA CON FILTRO DE PERÍODO (HISTÓRICO POR DEFECTO)        */}
+      {/* 1. HEADER MINIMALISTA CON FILTRO DE PERÍODO                               */}
       {/* ========================================================================= */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
         <div>
-          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-[#1F2937]">
-            Dashboard
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+            Dashboard Board Games
           </h1>
-          <p className="text-xs text-[#6B7280] mt-0.5">
-            Rendimiento comercial y tesorería del período seleccionado.
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Rendimiento comercial de juegos de mesa, tesorería y pulso de pedidos.
           </p>
         </div>
 
@@ -1055,153 +1034,75 @@ export function DashboardClient({
           <button
             onClick={handleManualRefresh}
             title="Refrescar datos"
-            className="p-2 rounded-xl bg-white hover:bg-[#FAF7F4] border border-[#E5DCD3] text-[#6B7280] hover:text-[#1F2937] transition-all cursor-pointer shadow-xs"
+            className="p-2 rounded-xl bg-card hover:bg-muted/50 border border-border/40 text-muted-foreground hover:text-foreground transition-all cursor-pointer shadow-2xs"
           >
-            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin text-[#7C5835]' : ''}`} />
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin text-indigo-500' : ''}`} />
           </button>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* 2. GRID DE 4 TARJETAS DE KPIS DINÁMICOS                                   */}
+      {/* 2. SALUD FINANCIERA EJECUTIVA (RENGLONES MINIMALISTAS DE ALTA DENSIDAD)   */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+      <ExecutiveKpiRows
+        dynamicKpis={dynamicKpis}
+        gasto={gasto}
+        breakEven={breakEven}
+        filteredVentasCount={filteredVentas.length}
+        totalPiezasPeriodo={totalPiezasPeriodo}
+        onInfoClick={setSelectedKpiExplainer}
+        formatCurrency={formatCurrency}
+        sparklineData={sparklineData}
+        capitalInmovilizado={capitalInmovilizado}
+      />
+
+      {/* ========================================================================= */}
+      {/* 2.b PULSO OPERATIVO BOARD GAMES (PREPARACIÓN, ENTREGAS & ALERTAS)          */}
+      {/* ========================================================================= */}
+      <OperationalPulseBar 
+        pedidos={rawVentas} 
+        productos={rawProductos}
+      />
+
+      {/* ========================================================================= */}
+      {/* 3. GRÁFICOS ANALÍTICOS & CANALES DE CAPTACIÓN                              */}
+      {/* ========================================================================= */}
+      <div className="grid gap-4 grid-cols-1 lg:grid-cols-12 items-stretch">
         
-        {/* KPI 1: Facturación & Utilidad */}
-        <div className="bg-white border border-[#E5DCD3] rounded-2xl p-4 shadow-xs flex flex-col justify-between space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#6B7280]">Facturación del Período</span>
-            <div className="p-1.5 rounded-lg bg-[#FAF7F4] text-[#7C5835]">
-              <TrendingUp className="h-4 w-4" />
-            </div>
-          </div>
-          <div>
-            <div className="text-2xl font-black font-mono text-[#1F2937] tracking-tight tabular-nums">
-              {formatCurrency(dynamicKpis.ingresosVentas)}
-            </div>
-            <div className="flex items-center gap-1.5 mt-1 text-xs">
-              <span className="font-semibold text-[#059669]">
-                +{dynamicKpis.margenPorcentaje.toFixed(1)}% margen
-              </span>
-              <span className="text-[#6B7280]">•</span>
-              <span className="text-[#6B7280] truncate">
-                +{formatCurrency(dynamicKpis.gananciaNeta)} util.
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* KPI 2: Saldo Disponible en Caja */}
-        <div className="bg-white border border-[#E5DCD3] rounded-2xl p-4 shadow-xs flex flex-col justify-between space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#6B7280]">Saldo Disponible en Caja</span>
-            <div className={`p-1.5 rounded-lg ${gasto.saldoActualCaja > 0 ? 'bg-[#ECFDF5] text-[#059669]' : 'bg-[#FEF3C7] text-[#92400E]'}`}>
-              <ShieldCheck className="h-4 w-4" />
-            </div>
-          </div>
-          <div>
-            <div className={`text-2xl font-black font-mono tracking-tight tabular-nums ${gasto.saldoActualCaja > 0 ? 'text-[#059669]' : 'text-[#92400E]'}`}>
-              {formatCurrency(gasto.saldoActualCaja)}
-            </div>
-            <div className="flex items-center gap-1.5 mt-1 text-xs text-[#6B7280] truncate">
-              <span>Cobrado: {formatCurrency(dynamicKpis.totalCobradoVentas)}</span>
-              {dynamicKpis.totalIngresosDirectos > 0 && (
-                <>
-                  <span>•</span>
-                  <span>Inyecciones: {formatCurrency(dynamicKpis.totalIngresosDirectos)}</span>
-                </>
-              )}
-              <span>•</span>
-              <span>Egresos: {formatCurrency(dynamicKpis.egresosTotales)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* KPI 3: Cobranzas */}
-        <div className="bg-white border border-[#E5DCD3] rounded-2xl p-4 shadow-xs flex flex-col justify-between space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#6B7280]">Total Cobrado</span>
-            <div className="p-1.5 rounded-lg bg-[#FAF7F4] text-[#7C5835]">
-              <Wallet className="h-4 w-4" />
-            </div>
-          </div>
-          <div>
-            <div className="text-2xl font-black font-mono text-[#1F2937] tracking-tight tabular-nums">
-              {formatCurrency(dynamicKpis.totalCobradoVentas)}
-            </div>
-            <div className="flex items-center gap-1.5 mt-1 text-xs text-[#6B7280] truncate">
-              {dynamicKpis.saldoPorCobrar > 0 ? (
-                <span className="text-[#92400E] font-medium">
-                  Por cobrar: {formatCurrency(dynamicKpis.saldoPorCobrar)}
-                </span>
-              ) : (
-                <span className="text-[#059669] font-medium">
-                  ✓ Cuentas 100% al día
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* KPI 4: Ticket Promedio */}
-        <div className="bg-white border border-[#E5DCD3] rounded-2xl p-4 shadow-xs flex flex-col justify-between space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#6B7280]">Ticket Promedio</span>
-            <div className="p-1.5 rounded-lg bg-[#FAF7F4] text-[#7C5835]">
-              <ShoppingBag className="h-4 w-4" />
-            </div>
-          </div>
-          <div>
-            <div className="text-2xl font-black font-mono text-[#1F2937] tracking-tight tabular-nums">
-              {formatCurrency(dynamicKpis.ticketPromedio)}
-            </div>
-            <div className="flex items-center gap-1.5 mt-1 text-xs text-[#6B7280] truncate">
-              <span>Costo base: {formatCurrency(dynamicKpis.costoFabricacionTotal)}</span>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 3. GRÁFICOS ANALÍTICOS (EVOLUCIÓN FINANCIERA & DISTRIBUCIÓN DE GASTOS)     */}
-      {/* ========================================================================= */}
-      <div className="grid gap-4 grid-cols-1 lg:grid-cols-12">
-        
-        {/* Gráfico de Evolución y Análisis Financiero (8 cols) */}
-        <Card className="lg:col-span-8 bg-white border-[#E5DCD3] shadow-xs rounded-2xl overflow-hidden flex flex-col justify-between">
-          <CardHeader className="p-4 sm:p-5 pb-2">
+        {/* Gráfico de Evolución y Análisis Financiero (7 cols) */}
+        <Card className="lg:col-span-7 bg-card border border-border/40 shadow-2xs rounded-2xl overflow-hidden flex flex-col justify-between min-h-[420px]">
+          <CardHeader className="p-4 sm:p-5 pb-2 border-b border-border/30">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <CardTitle className="text-[#1F2937] text-sm sm:text-base font-black">
+                  <CardTitle className="text-foreground text-sm font-semibold tracking-tight">
                     {EVOLUCION_CONFIG[evolucionTab].title}
                   </CardTitle>
                   {evolucionTab === 'MARGEN' && (
                     <button
                       type="button"
                       onClick={() => setSoloDiasConVentas(!soloDiasConVentas)}
-                      className="text-[10px] text-[#7C5835] hover:text-[#5B4026] bg-[#FAF7F4] hover:bg-[#F2ECE4] border border-[#E5DCD3] px-2 py-0.5 rounded-md font-semibold cursor-pointer transition-colors"
+                      className="text-[10px] text-muted-foreground hover:text-foreground bg-muted/40 border border-border/40 px-2 py-0.5 rounded-md font-medium cursor-pointer transition-colors"
                       title="Alternar entre ver solo días con ventas o todo el calendario"
                     >
-                      {soloDiasConVentas ? '⚡ Solo días con ventas' : '📅 Todo el calendario'}
+                      {soloDiasConVentas ? '⚡ Días con venta' : '📅 Todo el mes'}
                     </button>
                   )}
                 </div>
-                <CardDescription className="text-xs text-[#6B7280]">
+                <CardDescription className="text-xs text-muted-foreground mt-0.5">
                   {EVOLUCION_CONFIG[evolucionTab].description}
                 </CardDescription>
               </div>
 
               {/* Selector de los 3 gráficos */}
-              <div className="flex items-center p-0.5 rounded-xl bg-[#FAF8F5] border border-[#E2D9CC] shrink-0 overflow-x-auto max-w-full">
+              <div className="inline-flex items-center p-0.5 rounded-lg bg-muted/40 border border-border/40 shrink-0 overflow-x-auto max-w-full">
                 <button
                   type="button"
                   onClick={() => setEvolucionTab('MARGEN')}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer whitespace-nowrap ${
                     evolucionTab === 'MARGEN'
-                      ? 'bg-[#A36F4C] text-white shadow-2xs'
-                      : 'text-[#75695D] hover:text-[#241C15]'
+                      ? 'bg-card text-foreground font-semibold border border-border/40 shadow-2xs'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   Margen Pedidos
@@ -1209,10 +1110,10 @@ export function DashboardClient({
                 <button
                   type="button"
                   onClick={() => setEvolucionTab('FLUJO')}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer whitespace-nowrap ${
                     evolucionTab === 'FLUJO'
-                      ? 'bg-[#A36F4C] text-white shadow-2xs'
-                      : 'text-[#75695D] hover:text-[#241C15]'
+                      ? 'bg-card text-foreground font-semibold border border-border/40 shadow-2xs'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   Flujo de Caja
@@ -1220,21 +1121,21 @@ export function DashboardClient({
                 <button
                   type="button"
                   onClick={() => setEvolucionTab('ACUMULADO')}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer whitespace-nowrap ${
                     evolucionTab === 'ACUMULADO'
-                      ? 'bg-[#A36F4C] text-white shadow-2xs'
-                      : 'text-[#75695D] hover:text-[#241C15]'
+                      ? 'bg-card text-foreground font-semibold border border-border/40 shadow-2xs'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  Curva Acumulada
+                  Acumulado
                 </button>
                 <button
                   type="button"
                   onClick={() => setEvolucionTab('TODOS')}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer whitespace-nowrap ${
                     evolucionTab === 'TODOS'
-                      ? 'bg-[#A36F4C] text-white shadow-2xs'
-                      : 'text-[#75695D] hover:text-[#241C15]'
+                      ? 'bg-card text-foreground font-semibold border border-border/40 shadow-2xs'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   Ver los 3
@@ -1243,266 +1144,45 @@ export function DashboardClient({
             </div>
           </CardHeader>
 
-          <CardContent className="p-3 sm:p-5 pt-0">
+          <CardContent className="p-3 sm:p-5 pt-3 flex-1 flex flex-col justify-center">
             {metricasEvolucion.length === 0 ? (
-              <div className="h-[280px] flex items-center justify-center text-xs text-[#6B7280] italic">
+              <div className="h-[280px] flex items-center justify-center text-xs text-muted-foreground italic">
                 No hay movimientos registrados en el período seleccionado.
               </div>
             ) : evolucionTab === 'MARGEN' ? (
-              <div className="h-[280px] sm:h-[320px] w-full">
-                {renderMargenChart(metricasEvolucion)}
-              </div>
+              renderMargenChart(metricasEvolucion)
             ) : evolucionTab === 'FLUJO' ? (
-              <div className="h-[280px] sm:h-[320px] w-full">
-                {renderFlujoChart(metricasEvolucion)}
-              </div>
+              renderFlujoChart(metricasEvolucion)
             ) : evolucionTab === 'ACUMULADO' ? (
-              <div className="h-[280px] sm:h-[320px] w-full">
-                {renderAcumuladoChart(metricasEvolucion)}
-              </div>
+              renderAcumuladoChart(metricasEvolucion)
             ) : (
-              <div className="space-y-6 pt-2">
+              <div className="space-y-6 py-2">
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-bold text-[#1F2937]">1. Margen Comercial por Pedido</span>
-                    <span className="text-[10px] text-[#6B7280]">Rentabilidad directa de juegos vendidos</span>
-                  </div>
-                  <div className="h-[230px] w-full">
-                    {renderMargenChart(metricasEvolucion)}
-                  </div>
+                  <h4 className="text-xs font-semibold text-muted-foreground mb-2">1. Margen Real por Pedido</h4>
+                  {renderMargenChart(metricasEvolucion, 'h-[200px]')}
                 </div>
-
-                <div className="border-t border-[#F5EFEB] pt-4">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-bold text-[#1F2937]">2. Flujo Diario de Caja Real</span>
-                    <span className="text-[10px] text-[#6B7280]">Cobranzas efectivas vs. egresos de la tienda</span>
-                  </div>
-                  <div className="h-[230px] w-full">
-                    {renderFlujoChart(metricasEvolucion)}
-                  </div>
+                <div>
+                  <h4 className="text-xs font-semibold text-muted-foreground mb-2">2. Flujo Diario de Caja</h4>
+                  {renderFlujoChart(metricasEvolucion, 'h-[200px]')}
                 </div>
-
-                <div className="border-t border-[#F5EFEB] pt-4">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-bold text-[#1F2937]">3. Curva Acumulativa del Período</span>
-                    <span className="text-[10px] text-[#6B7280]">Crecimiento acumulado y punto de equilibrio</span>
-                  </div>
-                  <div className="h-[230px] w-full">
-                    {renderAcumuladoChart(metricasEvolucion)}
-                  </div>
+                <div>
+                  <h4 className="text-xs font-semibold text-muted-foreground mb-2">3. Curva Acumulativa</h4>
+                  {renderAcumuladoChart(metricasEvolucion, 'h-[200px]')}
                 </div>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Donut de Gastos vs Ingresos / Categorías (4 cols) */}
-        <Card className="lg:col-span-4 bg-white border-[#E5DCD3] shadow-xs rounded-2xl overflow-hidden flex flex-col justify-between">
-          <CardHeader className="p-4 sm:p-5 pb-0">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <CardTitle className="text-[#1F2937] text-sm sm:text-base font-black">
-                  {distribucionMode === 'VS' ? 'Gastos vs Ingresos' : 'Distribución de Gastos'}
-                </CardTitle>
-                <CardDescription className="text-xs text-[#6B7280]">
-                  {distribucionMode === 'VS' ? 'Relación de flujo y balance en caja' : 'Egresos y compras de la tienda'}
-                </CardDescription>
-              </div>
-
-              {/* Selector de Modo */}
-              <div className="flex items-center p-0.5 rounded-xl bg-[#FAF8F5] border border-[#E2D9CC] shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setDistribucionMode('VS')}
-                  className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                    distribucionMode === 'VS'
-                      ? 'bg-[#A36F4C] text-white shadow-2xs'
-                      : 'text-[#75695D] hover:text-[#241C15]'
-                  }`}
-                >
-                  Vs Ingresos
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDistribucionMode('CATEGORIAS')}
-                  className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                    distribucionMode === 'CATEGORIAS'
-                      ? 'bg-[#A36F4C] text-white shadow-2xs'
-                      : 'text-[#75695D] hover:text-[#241C15]'
-                  }`}
-                >
-                  Categorías
-                </button>
-              </div>
-            </div>
-          </CardHeader>
-
-          <CardContent className="p-4 pt-0 space-y-3">
-            {distribucionMode === 'VS' ? (
-              <>
-                {/* Gráfico Donut: Gastos vs Ingresos */}
-                <div className="h-[180px] w-full flex items-center justify-center relative">
-                  {comparativaIngresosGastos.dataDonut.length === 0 ? (
-                    <div className="text-xs text-[#6B7280] italic text-center">
-                      Sin movimientos en el período seleccionado.
-                    </div>
-                  ) : (
-                    <>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={comparativaIngresosGastos.dataDonut}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={54}
-                            outerRadius={78}
-                            paddingAngle={3}
-                            dataKey="value"
-                            stroke="#FFFFFF"
-                            strokeWidth={2}
-                          >
-                            {comparativaIngresosGastos.dataDonut.map((entry, index) => (
-                              <Cell key={`cell-vs-${index}`} fill={entry.color} />
-                            ))}
-                          </Pie>
-                          <Tooltip 
-                            contentStyle={{ backgroundColor: '#FFFFFF', border: '1px solid #E5DCD3', borderRadius: '12px', fontSize: '11px' }}
-                            formatter={(val: any, name: any) => [`S/ ${Number(val).toFixed(2)}`, name]}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-
-                      <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
-                        <span className="text-[10px] text-[#6B7280] uppercase font-bold tracking-wider">
-                          {comparativaIngresosGastos.balance >= 0 ? 'Superávit' : 'Déficit'}
-                        </span>
-                        <span className={`text-sm sm:text-base font-black font-mono tabular-nums ${
-                          comparativaIngresosGastos.balance >= 0 ? 'text-[#059669]' : 'text-[#DC2626]'
-                        }`}>
-                          {comparativaIngresosGastos.balance >= 0 ? '+' : ''}{formatCurrency(comparativaIngresosGastos.balance)}
-                        </span>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* Desglose comparativo Ingresos vs Gastos */}
-                <div className="space-y-2 pt-2 border-t border-[#F5EFEB]">
-                  {/* Fila 1: Ingresos */}
-                  <div className="flex items-center justify-between text-xs py-0.5">
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-[#059669]" />
-                      <span className="text-[#1F2937] text-[11px] font-semibold">Ingresos Cobrados</span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="font-mono font-bold text-[#059669] tabular-nums text-[11px]">
-                        {formatCurrency(comparativaIngresosGastos.ingresos)}
-                      </span>
-                      <span className="text-[10px] text-[#6B7280] font-mono w-8 text-right font-medium">
-                        {comparativaIngresosGastos.ingresosPct}%
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Fila 2: Gastos */}
-                  <div className="flex items-center justify-between text-xs py-0.5">
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-[#DC2626]" />
-                      <span className="text-[#1F2937] text-[11px] font-semibold">Gastos & Egresos</span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="font-mono font-bold text-[#DC2626] tabular-nums text-[11px]">
-                        {formatCurrency(comparativaIngresosGastos.egresos)}
-                      </span>
-                      <span className="text-[10px] text-[#6B7280] font-mono w-8 text-right font-medium">
-                        {comparativaIngresosGastos.egresosPct}%
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Fila 3: Flujo Neto */}
-                  <div className="flex items-center justify-between text-xs pt-1.5 border-t border-[#F5EFEB]/80">
-                    <span className="text-[11px] text-[#75695D] font-medium">Flujo Neto en Caja</span>
-                    <span className={`font-mono font-black text-xs tabular-nums ${
-                      comparativaIngresosGastos.balance >= 0 ? 'text-[#059669]' : 'text-[#DC2626]'
-                    }`}>
-                      {comparativaIngresosGastos.balance >= 0 ? '+' : ''}{formatCurrency(comparativaIngresosGastos.balance)}
-                    </span>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                {/* Gráfico Donut: Por Categorías */}
-                <div className="h-[180px] w-full flex items-center justify-center relative">
-                  {graficoInversionDinamico.length === 0 ? (
-                    <div className="text-xs text-[#6B7280] italic text-center">
-                      Sin egresos en el período seleccionado.
-                    </div>
-                  ) : (
-                    <>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={graficoInversionDinamico}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={54}
-                            outerRadius={78}
-                            paddingAngle={3}
-                            dataKey="value"
-                            stroke="#FFFFFF"
-                            strokeWidth={2}
-                          >
-                            {graficoInversionDinamico.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={DONUT_COLORS[index % DONUT_COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip 
-                            contentStyle={{ backgroundColor: '#FFFFFF', border: '1px solid #E5DCD3', borderRadius: '12px', fontSize: '11px' }}
-                            formatter={(val: any) => [`S/ ${Number(val).toFixed(2)}`, 'Gasto']}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-
-                      <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
-                        <span className="text-[10px] text-[#6B7280] uppercase font-bold">Total Egresos</span>
-                        <span className="text-sm sm:text-base font-black text-[#1F2937] font-mono tabular-nums">
-                          {formatCurrency(totalEgresosCalculado)}
-                        </span>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* Lista minimalista de categorías */}
-                <div className="space-y-1.5 pt-2 border-t border-[#F5EFEB]">
-                  {graficoInversionDinamico.map((item, idx) => {
-                    const pct = totalEgresosCalculado > 0 ? ((item.value / totalEgresosCalculado) * 100).toFixed(0) : '0'
-                    const color = DONUT_COLORS[idx % DONUT_COLORS.length]
-
-                    return (
-                      <div key={item.name} className="flex items-center justify-between text-xs py-0.5">
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                          <span className="text-[#1F2937] truncate text-[11px] font-medium">{item.name}</span>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="font-mono font-semibold text-[#1F2937] tabular-nums text-[11px]">
-                            {formatCurrency(item.value)}
-                          </span>
-                          <span className="text-[10px] text-[#6B7280] font-mono w-7 text-right">
-                            {pct}%
-                          </span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        {/* Canales de Captación de Clientes (5 cols) */}
+        <div className="lg:col-span-5 h-full">
+          <AcquisitionChannelsCard
+            ventas={filteredVentas}
+            ticketPromedio={dynamicKpis.ticketPromedio}
+            totalPedidos={filteredVentas.length}
+            className="h-full"
+          />
+        </div>
       </div>
 
       {/* ========================================================================= */}
@@ -1511,18 +1191,18 @@ export function DashboardClient({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
         
         {/* TOP 5 CLIENTES EN VALOR */}
-        <Card className="bg-white border-[#E5DCD3] shadow-xs rounded-2xl overflow-hidden flex flex-col justify-between">
-          <CardHeader className="p-4 sm:p-5 pb-3 border-b border-[#F5EFEB]">
+        <Card className="bg-card border border-border/40 shadow-2xs rounded-2xl overflow-hidden flex flex-col justify-between">
+          <CardHeader className="p-4 sm:p-5 pb-3 border-b border-border/30">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-[#7C5835]" />
-                <CardTitle className="text-sm sm:text-base font-black text-[#1F2937]">
+                <Trophy className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
                   Top Clientes en Valor
                 </CardTitle>
               </div>
               <Link
                 href="/pedidos"
-                className="inline-flex items-center gap-1 text-xs font-semibold text-[#7C5835] hover:text-[#5E4328] hover:underline"
+                className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
               >
                 <span>Ver pedidos</span>
                 <ArrowUpRight className="h-3 w-3" />
@@ -1530,32 +1210,32 @@ export function DashboardClient({
             </div>
           </CardHeader>
 
-          <CardContent className="p-0 flex-1 divide-y divide-[#F5EFEB]">
+          <CardContent className="p-0 flex-1 divide-y divide-border/30">
             {topClientesDinamico.length === 0 ? (
-              <div className="py-8 text-center text-xs text-[#6B7280] space-y-2">
-                <Users className="h-6 w-6 text-[#B8A99A] mx-auto opacity-50" />
+              <div className="py-8 text-center text-xs text-muted-foreground space-y-2">
+                <Users className="h-6 w-6 text-muted-foreground/40 mx-auto" />
                 <p>No hay compras registradas en este período.</p>
               </div>
             ) : (
               topClientesDinamico.map((c, index) => (
                 <div 
                   key={`${c.cliente}-${index}`}
-                  className="px-4 sm:px-5 py-3 flex items-center justify-between gap-3 hover:bg-[#FAF7F4]/50 transition-colors"
+                  className="px-4 sm:px-5 py-3 flex items-center justify-between gap-3 hover:bg-muted/30 transition-colors"
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <span className="text-xs font-bold text-[#6B7280] w-4 text-center shrink-0">
-                      {index + 1}
+                    <span className="font-mono text-xs font-semibold text-muted-foreground/60 w-5 tabular-nums text-center shrink-0">
+                      {String(index + 1).padStart(2, '0')}
                     </span>
 
-                    <div className="w-7 h-7 rounded-lg bg-[#FAF7F4] border border-[#E5DCD3] text-[#7C5835] font-bold text-[11px] flex items-center justify-center shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-muted border border-border/40 text-muted-foreground text-xs font-semibold flex items-center justify-center shrink-0">
                       {getInitials(c.cliente)}
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <h4 className="text-xs font-bold text-[#1F2937] truncate" title={c.cliente}>
-                        {c.cliente}
+                      <h4 className="text-xs font-semibold text-foreground truncate" title={c.cliente}>
+                        {formatClienteNombre(c.cliente)}
                       </h4>
-                      <p className="text-[11px] text-[#6B7280] truncate">
+                      <p className="text-[11px] text-muted-foreground truncate">
                         {c.pedidosCount} {c.pedidosCount === 1 ? 'pedido' : 'pedidos'} • {c.piezasCount} {c.piezasCount === 1 ? 'juego' : 'juegos'}
                         {c.canalPreferido && ` • ${c.canalPreferido}`}
                       </p>
@@ -1563,16 +1243,16 @@ export function DashboardClient({
                   </div>
 
                   <div className="text-right shrink-0">
-                    <div className="text-xs sm:text-sm font-mono font-bold text-[#1F2937] tabular-nums">
+                    <div className="text-xs sm:text-sm font-mono font-bold text-foreground tabular-nums">
                       {formatCurrency(c.totalComprado)}
                     </div>
                     <div>
                       {c.saldoPendiente > 0 ? (
-                        <span className="text-[10px] font-medium text-[#92400E]">
+                        <span className="text-[10px] font-mono font-medium text-amber-600 dark:text-amber-400">
                           Debe {formatCurrency(c.saldoPendiente)}
                         </span>
                       ) : (
-                        <span className="text-[10px] font-medium text-[#059669]">
+                        <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
                           Al día
                         </span>
                       )}
@@ -1585,46 +1265,46 @@ export function DashboardClient({
         </Card>
 
         {/* TOP 5 JUEGOS MÁS RENTABLES / MÁS VENDIDOS */}
-        <Card className="bg-white border-[#E5DCD3] shadow-xs rounded-2xl overflow-hidden flex flex-col justify-between">
-          <CardHeader className="p-4 sm:p-5 pb-3 border-b border-[#F5EFEB]">
+        <Card className="bg-card border border-border/40 shadow-2xs rounded-2xl overflow-hidden flex flex-col justify-between">
+          <CardHeader className="p-4 sm:p-5 pb-3 border-b border-border/30">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <Dice5 className="h-4 w-4 text-[#7C5835]" />
-                <CardTitle className="text-sm sm:text-base font-black text-[#1F2937]">
+                <Dices className="h-4 w-4 text-indigo-500" />
+                <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
                   {rankingArticulosMode === 'RENTABILIDAD' ? 'Top Juegos Más Rentables' : 'Top Juegos Más Vendidos'}
                 </CardTitle>
               </div>
 
               {/* Selector de ordenamiento: Rentabilidad vs Volumen */}
               <div className="flex items-center gap-2">
-                <div className="flex items-center p-0.5 rounded-lg bg-[#FAF8F5] border border-[#E2D9CC] shrink-0">
+                <div className="inline-flex items-center p-0.5 rounded-lg bg-muted/40 border border-border/40 shrink-0">
                   <button
                     type="button"
                     onClick={() => setRankingArticulosMode('RENTABILIDAD')}
-                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-medium transition-all cursor-pointer ${
                       rankingArticulosMode === 'RENTABILIDAD'
-                        ? 'bg-[#059669] text-white shadow-2xs'
-                        : 'text-[#75695D] hover:text-[#241C15]'
+                        ? 'bg-card text-foreground font-semibold shadow-2xs'
+                        : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    💰 Ganancia
+                    Margen
                   </button>
                   <button
                     type="button"
                     onClick={() => setRankingArticulosMode('VOLUMEN')}
-                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-medium transition-all cursor-pointer ${
                       rankingArticulosMode === 'VOLUMEN'
-                        ? 'bg-[#A36F4C] text-white shadow-2xs'
-                        : 'text-[#75695D] hover:text-[#241C15]'
+                        ? 'bg-card text-foreground font-semibold shadow-2xs'
+                        : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    📦 Unidades
+                    Unidades
                   </button>
                 </div>
 
                 <Link
                   href="/catalogo"
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-[#7C5835] hover:text-[#5E4328] hover:underline shrink-0"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0"
                 >
                   <span>Catálogo</span>
                   <ArrowUpRight className="h-3 w-3" />
@@ -1633,32 +1313,32 @@ export function DashboardClient({
             </div>
           </CardHeader>
 
-          <CardContent className="p-0 flex-1 divide-y divide-[#F5EFEB]">
+          <CardContent className="p-0 flex-1 divide-y divide-border/30">
             {topArticulosDinamico.length === 0 ? (
-              <div className="py-8 text-center text-xs text-[#6B7280] space-y-2">
-                <Dice5 className="h-6 w-6 text-[#B8A99A] mx-auto opacity-50" />
+              <div className="py-8 text-center text-xs text-muted-foreground space-y-2">
+                <Dice5 className="h-6 w-6 text-muted-foreground/40 mx-auto" />
                 <p>No hay juegos despachados en este período.</p>
               </div>
             ) : (
               topArticulosDinamico.map((art, index) => (
                 <div 
                   key={`${art.id}-${index}`}
-                  className="px-4 sm:px-5 py-3 flex items-center justify-between gap-3 hover:bg-[#FAF7F4]/50 transition-colors"
+                  className="px-4 sm:px-5 py-3 flex items-center justify-between gap-3 hover:bg-muted/30 transition-colors"
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <span className="text-xs font-bold text-[#6B7280] w-4 text-center shrink-0">
-                      {index + 1}
+                    <span className="font-mono text-xs font-semibold text-muted-foreground/60 w-5 tabular-nums text-center shrink-0">
+                      {String(index + 1).padStart(2, '0')}
                     </span>
 
-                    <div className="w-8 h-8 rounded-lg bg-[#FAF7F4] border border-[#E5DCD3] text-[#7C5835] flex items-center justify-center shrink-0">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
                       <Dice5 className="h-4 w-4" />
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <h4 className="text-xs font-bold text-[#1F2937] truncate" title={art.nombreModelo}>
+                      <h4 className="text-xs font-semibold text-foreground truncate" title={art.nombreModelo}>
                         {art.nombreModelo}
                       </h4>
-                      <p className="text-[11px] text-[#6B7280] truncate">
+                      <p className="text-[11px] text-muted-foreground truncate">
                         {art.unidadesVendidas} {art.unidadesVendidas === 1 ? 'unidad' : 'unidades'} • en {art.pedidosCount} {art.pedidosCount === 1 ? 'pedido' : 'pedidos'}
                         <span className="mx-1">•</span>
                         <span>Ventas: {formatCurrency(art.totalFacturado)}</span>
@@ -1667,10 +1347,10 @@ export function DashboardClient({
                   </div>
 
                   <div className="text-right shrink-0">
-                    <div className="text-xs sm:text-sm font-mono font-black text-[#059669] tabular-nums">
+                    <div className="text-xs sm:text-sm font-mono font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
                       +{formatCurrency(art.gananciaNeta || 0)}
                     </div>
-                    <div className="text-[10px] font-medium text-[#6B7280]">
+                    <div className="text-[10px] font-mono text-muted-foreground">
                       {art.margenPorcentaje != null ? `${art.margenPorcentaje.toFixed(0)}% margen` : ''}
                     </div>
                   </div>
@@ -1681,6 +1361,16 @@ export function DashboardClient({
         </Card>
 
       </div>
+
+      {/* Modal Educativo y de Auditoría de KPIs */}
+      <KpiExplainerModal
+        isOpen={!!selectedKpiExplainer}
+        onClose={() => setSelectedKpiExplainer(null)}
+        kpiId={selectedKpiExplainer}
+        from={dateRange.from}
+        to={dateRange.to}
+        negocio="BG"
+      />
     </div>
   )
 }

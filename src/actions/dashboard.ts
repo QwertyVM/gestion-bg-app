@@ -9,7 +9,7 @@ import { getActiveNegocioServer } from '@/lib/business-server'
 export async function getDashboardData(negocio?: TipoNegocio) {
   const targetNegocio = negocio || await getActiveNegocioServer()
 
-  const [inversiones, ventas, ingresosDirectos, filamentos] = await Promise.all([
+  const [inversiones, ventas, ingresosDirectos, productos] = await Promise.all([
     prisma.inversion.findMany({
       where: { negocio: targetNegocio },
       orderBy: { createdAt: 'desc' }
@@ -19,8 +19,13 @@ export async function getDashboardData(negocio?: TipoNegocio) {
       where: { negocio: targetNegocio },
       orderBy: { fecha: 'desc' }
     }),
-    Promise.resolve([] as any[])
+    prisma.producto.findMany({
+      where: { negocio: targetNegocio, activo: true },
+      select: { id: true, nombreModelo: true, stock: true, costoBase: true, lineaCategoria: true, activo: true }
+    })
   ])
+
+  const filamentos: any[] = []
 
   // 1. Egresos / Inversión Total en el Taller (Maquinaria + Insumos + Servicios)
   const egresosTotales = inversiones.reduce((sum, item) => sum + Number(item.costoTotal), 0)
@@ -473,7 +478,15 @@ export async function getDashboardData(negocio?: TipoNegocio) {
     rawVentas: ventas,
     rawInversiones: serializedInversiones,
     rawIngresosDirectos: serializedIngresosDirectos,
-    rawFilamentos: serializedFilamentos
+    rawFilamentos: serializedFilamentos,
+    rawProductos: productos.map((p: any) => ({
+      id: p.id,
+      nombreModelo: p.nombreModelo,
+      stock: Number(p.stock || 0),
+      costoBase: Number(p.costoBase || 0),
+      lineaCategoria: p.lineaCategoria,
+      activo: p.activo
+    }))
   }
 }
 

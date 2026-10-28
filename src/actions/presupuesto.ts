@@ -128,3 +128,19 @@ export async function getDatosPresupuestoTranquilidad(): Promise<DatosPresupuest
     packagingPromedioPorPedido
   }
 }
+
+
+export async function getResumenBlindadoOficial() {
+  const datos = await getDatosPresupuestoTranquilidad()
+  return {
+    saldoActualCaja: datos.saldoActualCaja,
+    totalBlindadoMes: 350.00,
+    gastoDisponibleHoy: Math.max(0, datos.saldoActualCaja - 350.00),
+    cuotaPrestamoMensual: 0,
+    cuotaPrestamoPendiente: 0,
+    totalPagadoPrestamoMes: 0,
+    reservaCapexMensual: 0,
+    gastosFijosTaller: 350.00,
+    partidasBlindadas: []
+  }
+}
