@@ -2,7 +2,15 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Check, RotateCcw } from 'lucide-react'
-import { DatePreset, DateRange, getPresetDateRange, MESES_ES, formatFechaEvolucion } from '@/lib/date-utils'
+import { 
+  DatePreset, 
+  DateRange, 
+  getPresetDateRange, 
+  getMonthYearDateRange, 
+  getMonthFromDateRange, 
+  MESES_ES, 
+  formatFechaEvolucion 
+} from '@/lib/date-utils'
 
 interface DateFilterControlProps {
   value: DateRange
@@ -25,6 +33,21 @@ export function DateFilterControl({
 }: DateFilterControlProps) {
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Año visualizado en el selector de meses
+  const monthInfo = getMonthFromDateRange(value)
+  const [matrixYear, setMatrixYear] = useState(() => {
+    return monthInfo.isMonth ? monthInfo.year : new Date().getFullYear()
+  })
+
+  // Sincronizar año si cambia externamente el valor y el menú se abre
+  useEffect(() => {
+    if (isOpen) {
+      if (monthInfo.isMonth) {
+        setMatrixYear(monthInfo.year)
+      }
+    }
+  }, [isOpen, value]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -49,9 +72,23 @@ export function DateFilterControl({
 
   // Label description for button display
   const getDisplayLabel = () => {
+    if (monthInfo.isMonth) {
+      const now = new Date()
+      const isCurrentMonth = now.getFullYear() === monthInfo.year && (now.getMonth() + 1) === monthInfo.month
+      if (isCurrentMonth) {
+        return `${MESES_ES[monthInfo.month - 1]} ${monthInfo.year} (Mes Actual)`
+      }
+      return `${MESES_ES[monthInfo.month - 1]} ${monthInfo.year}`
+    }
+
     if (value.preset === 'ESTE_MES') {
       const now = new Date()
       return `${MESES_ES[now.getMonth()]} ${now.getFullYear()} (Mes Actual)`
+    }
+    if (value.preset === 'MES_ANTERIOR') {
+      const prev = new Date()
+      prev.setMonth(prev.getMonth() - 1)
+      return `${MESES_ES[prev.getMonth()]} ${prev.getFullYear()}`
     }
     if (value.preset === 'ESTA_SEMANA') {
       if (value.from && value.to) {
@@ -85,6 +122,29 @@ export function DateFilterControl({
 
   const handlePrevPreset = (e: React.MouseEvent) => {
     e.stopPropagation()
+    // Si estamos en un mes específico, navegar al mes anterior
+    if (monthInfo.isMonth) {
+      let prevMonth = monthInfo.month - 1
+      let prevYear = monthInfo.year
+      if (prevMonth < 1) {
+        prevMonth = 12
+        prevYear -= 1
+      }
+      onChange(getMonthYearDateRange(prevYear, prevMonth))
+      return
+    }
+
+    if (value.preset === 'ESTA_SEMANA') {
+      handleSelectPreset('SEMANA_ANTERIOR')
+      return
+    }
+
+    if (value.preset === 'TODO') {
+      const now = new Date()
+      onChange(getMonthYearDateRange(now.getFullYear(), now.getMonth() + 1))
+      return
+    }
+
     const currentIndex = PRESET_ORDER.indexOf(value.preset)
     if (currentIndex > 0) {
       handleSelectPreset(PRESET_ORDER[currentIndex - 1])
@@ -95,11 +155,33 @@ export function DateFilterControl({
 
   const handleNextPreset = (e: React.MouseEvent) => {
     e.stopPropagation()
+    // Si estamos en un mes específico, navegar al mes siguiente
+    if (monthInfo.isMonth) {
+      let nextMonth = monthInfo.month + 1
+      let nextYear = monthInfo.year
+      if (nextMonth > 12) {
+        nextMonth = 1
+        nextYear += 1
+      }
+      onChange(getMonthYearDateRange(nextYear, nextMonth))
+      return
+    }
+
+    if (value.preset === 'SEMANA_ANTERIOR') {
+      handleSelectPreset('ESTA_SEMANA')
+      return
+    }
+
+    if (value.preset === 'ESTA_SEMANA') {
+      handleSelectPreset('ESTE_MES')
+      return
+    }
+
     const currentIndex = PRESET_ORDER.indexOf(value.preset)
     if (currentIndex >= 0 && currentIndex < PRESET_ORDER.length - 1) {
       handleSelectPreset(PRESET_ORDER[currentIndex + 1])
     } else {
-      handleSelectPreset(PRESET_ORDER[0])
+      handleSelectPreset('TODO')
     }
   }
 
@@ -187,7 +269,7 @@ export function DateFilterControl({
                     : 'bg-secondary/60 text-muted-foreground hover:text-foreground hover:bg-secondary'
                 }`}
               >
-                <span>🌐 Histórico</span>
+                <span>🌐 Histórico Completo</span>
                 {value.preset === 'TODO' && <Check className="h-3.5 w-3.5" />}
               </button>
             )}
@@ -253,6 +335,77 @@ export function DateFilterControl({
               <span>⏱️ Hace 3 meses</span>
               {value.preset === 'ULTIMOS_3_MESES' && <Check className="h-3.5 w-3.5" />}
             </button>
+          </div>
+
+          {/* Selector de Meses Específicos con Matriz Anual */}
+          <div className="pt-2.5 border-t border-border/70 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <Calendar className="h-3 w-3 text-primary" />
+                Filtrar por Mes:
+              </span>
+              <div className="flex items-center gap-1 bg-secondary/50 rounded-lg p-0.5 border border-border/50">
+                <button
+                  type="button"
+                  title="Año anterior"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setMatrixYear((prev) => prev - 1)
+                  }}
+                  className="h-5 w-5 flex items-center justify-center rounded hover:bg-background text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                >
+                  <ChevronLeft className="h-3 w-3" />
+                </button>
+                <span className="text-xs font-mono font-bold text-foreground px-1">
+                  {matrixYear}
+                </span>
+                <button
+                  type="button"
+                  title="Año siguiente"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setMatrixYear((prev) => prev + 1)
+                  }}
+                  className="h-5 w-5 flex items-center justify-center rounded hover:bg-background text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                >
+                  <ChevronRight className="h-3 w-3" />
+                </button>
+              </div>
+            </div>
+
+            {/* Matriz 4x3 de Meses */}
+            <div className="grid grid-cols-4 gap-1.5">
+              {MESES_ES.map((mes, idx) => {
+                const now = new Date()
+                const monthNum = idx + 1
+                const isCurrentCalendarMonth = now.getFullYear() === matrixYear && now.getMonth() === idx
+                const isSelected = monthInfo.isMonth && monthInfo.year === matrixYear && monthInfo.month === monthNum
+
+                return (
+                  <button
+                    key={mes}
+                    type="button"
+                    onClick={() => {
+                      const newRange = getMonthYearDateRange(matrixYear, monthNum)
+                      onChange(newRange)
+                      setIsOpen(false)
+                    }}
+                    className={`py-1.5 text-[11px] rounded-lg font-bold transition-all cursor-pointer text-center relative ${
+                      isSelected
+                        ? 'bg-primary text-primary-foreground shadow-xs'
+                        : isCurrentCalendarMonth
+                        ? 'bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20'
+                        : 'bg-secondary/50 text-muted-foreground hover:text-foreground hover:bg-secondary'
+                    }`}
+                  >
+                    <span>{mes.substring(0, 3)}</span>
+                    {isCurrentCalendarMonth && !isSelected && (
+                      <span className="absolute top-1 right-1 w-1 h-1 rounded-full bg-primary" />
+                    )}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </div>
       )}

@@ -1,4 +1,14 @@
-export type DatePreset = 'ESTE_MES' | 'MES_ANTERIOR' | 'ULTIMOS_30_DIAS' | 'ULTIMOS_3_MESES' | 'ESTE_ANIO' | 'ESTA_SEMANA' | 'SEMANA_ANTERIOR' | 'TODO' | 'PERSONALIZADO'
+export type DatePreset = 
+  | 'ESTE_MES' 
+  | 'MES_ANTERIOR' 
+  | 'ULTIMOS_30_DIAS' 
+  | 'ULTIMOS_3_MESES' 
+  | 'ESTE_ANIO' 
+  | 'ESTA_SEMANA' 
+  | 'SEMANA_ANTERIOR' 
+  | 'MES_ESPECIFICO'
+  | 'TODO' 
+  | 'PERSONALIZADO'
 
 export interface DateRange {
   from: string | null // Formato YYYY-MM-DD
@@ -116,7 +126,7 @@ export function getDefaultDateRange(preset: DatePreset = 'TODO'): DateRange {
 }
 
 /**
- * Obtener el rango de fechas para un mes y año específicos
+ * Obtener el rango de fechas para un mes y año específicos (1-indexado: 1 = Enero, 12 = Diciembre)
  */
 export function getMonthYearDateRange(year: number, month: number): DateRange {
   const firstDay = new Date(year, month - 1, 1)
@@ -124,8 +134,24 @@ export function getMonthYearDateRange(year: number, month: number): DateRange {
   return {
     from: formatToYMD(firstDay),
     to: formatToYMD(lastDay),
-    preset: 'PERSONALIZADO'
+    preset: 'MES_ESPECIFICO'
   }
+}
+
+/**
+ * Detectar si un DateRange corresponde a un mes calendario completo
+ */
+export function getMonthFromDateRange(range: DateRange): { isMonth: boolean; year: number; month: number } {
+  if (!range.from || !range.to) return { isMonth: false, year: 0, month: 0 }
+  const [y1, m1, d1] = range.from.split('-').map(Number)
+  const [y2, m2, d2] = range.to.split('-').map(Number)
+  if (y1 === y2 && m1 === m2 && d1 === 1) {
+    const lastDay = new Date(y1, m1, 0).getDate()
+    if (d2 === lastDay) {
+      return { isMonth: true, year: y1, month: m1 }
+    }
+  }
+  return { isMonth: false, year: 0, month: 0 }
 }
 
 /**
