@@ -29,7 +29,7 @@ export default async function RootLayout({
 
   return (
     <html lang="es" suppressHydrationWarning className="h-full">
-      <body className={`${inter.className} min-h-full h-full w-full bg-[#F8F6F2] text-[#241C15] antialiased`}>
+      <body className={`${inter.className} min-h-full h-full w-full bg-background text-foreground antialiased`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="light"

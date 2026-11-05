@@ -12,7 +12,8 @@ import {
   Boxes,
   Phone,
   Clock,
-  User
+  User,
+  Printer
 } from 'lucide-react'
 import {
   Dialog,
@@ -34,6 +35,7 @@ export interface OrderDetailsModalProps {
   onClose: () => void
   onEdit: (pedido: PedidoView) => void
   onPedidoUpdated?: (updatedPedido: PedidoView) => void
+  onPrintThermal?: (pedido: PedidoView) => void
   productos?: ProductoOption[]
   productosMap?: Map<string, ProductoOption>
 }
@@ -145,6 +147,7 @@ export function OrderDetailsModal({
   onClose,
   onEdit,
   onPedidoUpdated,
+  onPrintThermal,
   productos = [],
   productosMap
 }: OrderDetailsModalProps) {
@@ -172,7 +175,15 @@ export function OrderDetailsModal({
       const ticketMsg = buildWhatsAppTicket(pedido)
       navigator.clipboard.writeText(ticketMsg)
       setCopiedNotification(true)
-      toast.success('¡Resumen de pedido copiado para WhatsApp!')
+
+      if (pedido.telefono && pedido.telefono.trim()) {
+        const rawDigits = pedido.telefono.replace(/\D/g, '')
+        const phoneWithCode = rawDigits.length === 9 ? `51${rawDigits}` : rawDigits
+        window.open(`https://wa.me/${phoneWithCode}?text=${encodeURIComponent(ticketMsg)}`, '_blank')
+        toast.success(`Abriendo WhatsApp con ${pedido.cliente}`)
+      } else {
+        toast.success('¡Resumen de pedido copiado para WhatsApp!')
+      }
       setTimeout(() => setCopiedNotification(false), 2500)
     } catch {
       toast.error('No se pudo copiar el ticket al portapapeles')
@@ -229,14 +240,14 @@ export function OrderDetailsModal({
         {/* ========================================================================= */}
         {/* 1. ENCABEZADO FIJO DEL PEDIDO                                            */}
         {/* ========================================================================= */}
-        <div className="px-6 pt-5 pb-4 border-b border-border/70 bg-card/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+        <div className="px-4 sm:px-6 pt-4 sm:pt-5 pb-3.5 sm:pb-4 border-b border-border/70 bg-card/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
           <div className="min-w-0">
             {/* Fila de título */}
             <div className="flex items-center flex-wrap gap-2">
-              <span className="font-mono text-xs font-extrabold bg-accent text-accent-foreground px-2.5 py-1 rounded-lg border border-border/70 shrink-0 mr-2 shadow-2xs">
+              <span className="font-mono text-xs font-extrabold bg-accent text-accent-foreground px-2.5 py-1 rounded-lg border border-border/70 shrink-0 mr-1 sm:mr-2 shadow-2xs">
                 {pedido.codigo}
               </span>
-              <h2 className="text-lg font-bold text-foreground truncate">
+              <h2 className="text-base sm:text-lg font-bold text-foreground truncate">
                 Pedido de {pedido.cliente}
               </h2>
             </div>
@@ -252,16 +263,30 @@ export function OrderDetailsModal({
           </div>
 
           {/* Acciones Rápidas */}
-          <div className="flex items-center gap-2 flex-wrap self-end sm:self-auto shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap self-stretch sm:self-auto justify-end shrink-0">
+            {onPrintThermal && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onPrintThermal(pedido)}
+                className="border-primary/30 text-primary hover:bg-primary/10 text-xs font-semibold h-9 px-3 sm:px-3.5 rounded-xl flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95 transition-all flex-1 sm:flex-none justify-center"
+                title="Imprimir boleta o ticket térmico de 80mm"
+              >
+                <Printer className="w-3.5 h-3.5 text-primary" />
+                <span className="hidden sm:inline">Boleta 80mm</span>
+                <span className="sm:hidden">80mm</span>
+              </Button>
+            )}
+
             <Button
               type="button"
               variant="outline"
               onClick={handleShareWhatsApp}
-              className="border-emerald-600/30 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/10 text-xs font-semibold h-9 px-3.5 rounded-xl flex items-center gap-1.5 shadow-2xs cursor-pointer transition-colors"
-              title="Copiar resumen para WhatsApp"
+              className="border-emerald-600/30 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/10 text-xs font-semibold h-9 px-3 sm:px-3.5 rounded-xl flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95 transition-all flex-1 sm:flex-none justify-center"
+              title="Abrir o copiar resumen para WhatsApp"
             >
               <Share2 className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Compartir por WhatsApp</span>
+              <span className="hidden sm:inline">Enviar WhatsApp</span>
               <span className="sm:hidden">WhatsApp</span>
             </Button>
 
@@ -269,10 +294,10 @@ export function OrderDetailsModal({
               type="button"
               variant="outline"
               onClick={() => onEdit(pedido)}
-              className="border-border text-foreground hover:bg-secondary text-xs font-semibold h-9 px-3.5 rounded-xl flex items-center gap-1.5 shadow-2xs cursor-pointer transition-colors"
+              className="border-border text-foreground hover:bg-secondary text-xs font-semibold h-9 px-3 sm:px-3.5 rounded-xl flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95 transition-all flex-1 sm:flex-none justify-center"
             >
               <Pencil className="w-3.5 h-3.5" />
-              <span>Editar Pedido</span>
+              <span>Editar</span>
             </Button>
 
             <Button
@@ -280,7 +305,7 @@ export function OrderDetailsModal({
               variant="ghost"
               size="icon"
               onClick={onClose}
-              className="h-8 w-8 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary border border-border/60 ml-1 cursor-pointer transition-colors"
+              className="h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary border border-border/60 shrink-0 cursor-pointer active:scale-95 transition-all"
               title="Cerrar modal"
             >
               <X className="h-4 w-4" />
@@ -291,7 +316,7 @@ export function OrderDetailsModal({
         {/* ========================================================================= */}
         {/* 2. CUERPO CON SCROLL VERTICAL FLUIDO                                     */}
         {/* ========================================================================= */}
-        <div className="p-6 space-y-5 overflow-y-auto flex-1">
+        <div className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1">
           {/* Notificación de copiado al portapapeles */}
           {copiedNotification && (
             <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300 rounded-xl text-xs font-bold text-center animate-in fade-in shadow-2xs">
@@ -402,70 +427,72 @@ export function OrderDetailsModal({
             </div>
 
             <div className="bg-card border border-border rounded-xl overflow-hidden shadow-2xs">
-              <table className="w-full table-fixed border-collapse">
-                <thead>
-                  <tr className="bg-secondary/40 border-b border-border/70 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    <th className="py-2.5 px-4 text-left w-[55%]">PRODUCTO</th>
-                    <th className="py-2.5 px-2 text-center w-[15%]">CANT.</th>
-                    <th className="py-2.5 px-2 text-right w-[15%]">P. UNIT</th>
-                    <th className="py-2.5 px-4 text-right w-[15%]">SUBTOTAL</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/50">
-                  {pedido.items.map((it) => {
-                    const prodImg = it.producto?.imagenUrl || localProdMap.get(it.productoId)?.imagenUrl
-                    return (
-                      <tr
-                        key={it.id}
-                        className="h-14 border-b border-border/50 hover:bg-secondary/20 transition-colors"
-                      >
-                        <td className="py-2 px-4 w-[55%] align-middle">
-                          <div className="flex items-center min-w-0">
-                            <ProductThumbnail
-                              src={prodImg}
-                              alt={it.nombreProductoSnapshot}
-                            />
-                            <div className="min-w-0 flex-1">
-                              <span
-                                className="text-xs font-bold text-foreground block truncate"
-                                title={it.nombreProductoSnapshot}
-                              >
-                                {it.nombreProductoSnapshot}
-                              </span>
-                              {it.personalizacion && (
-                                <span className="text-[10px] text-muted-foreground block font-normal italic truncate">
-                                  Nota: {it.personalizacion}
+              <div className="w-full overflow-x-auto">
+                <table className="w-full min-w-[460px] sm:min-w-0 table-fixed border-collapse">
+                  <thead>
+                    <tr className="bg-secondary/40 border-b border-border/70 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                      <th className="py-2.5 px-3 sm:px-4 text-left w-[52%]">PRODUCTO</th>
+                      <th className="py-2.5 px-2 text-center w-[14%]">CANT.</th>
+                      <th className="py-2.5 px-2 text-right w-[16%]">P. UNIT</th>
+                      <th className="py-2.5 px-3 sm:px-4 text-right w-[18%]">SUBTOTAL</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/50">
+                    {pedido.items.map((it) => {
+                      const prodImg = it.producto?.imagenUrl || localProdMap.get(it.productoId)?.imagenUrl
+                      return (
+                        <tr
+                          key={it.id}
+                          className="h-14 border-b border-border/50 hover:bg-secondary/20 transition-colors"
+                        >
+                          <td className="py-2 px-3 sm:px-4 w-[52%] align-middle">
+                            <div className="flex items-center min-w-0">
+                              <ProductThumbnail
+                                src={prodImg}
+                                alt={it.nombreProductoSnapshot}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <span
+                                  className="text-xs font-bold text-foreground block truncate"
+                                  title={it.nombreProductoSnapshot}
+                                >
+                                  {it.nombreProductoSnapshot}
                                 </span>
-                              )}
-                              {it.colores && it.colores.length > 0 && (
-                                <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                                  {it.colores.map((c) => (
-                                    <span
-                                      key={c.id}
-                                      className="text-[9px] px-1.5 py-0.2 rounded bg-secondary text-muted-foreground border border-border/60"
-                                    >
-                                      {c.nombreColor}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
+                                {it.personalizacion && (
+                                  <span className="text-[10px] text-muted-foreground block font-normal italic truncate">
+                                    Nota: {it.personalizacion}
+                                  </span>
+                                )}
+                                {it.colores && it.colores.length > 0 && (
+                                  <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                                    {it.colores.map((c) => (
+                                      <span
+                                        key={c.id}
+                                        className="text-[9px] px-1.5 py-0.2 rounded bg-secondary text-muted-foreground border border-border/60"
+                                      >
+                                        {c.nombreColor}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                        <td className="py-2 px-2 text-center text-xs font-bold text-foreground w-[15%] align-middle">
-                          {it.cantidad}
-                        </td>
-                        <td className="py-2 px-2 text-right text-xs font-medium text-muted-foreground font-mono w-[15%] align-middle">
-                          {formatCurrency(it.precioUnitario)}
-                        </td>
-                        <td className="py-2 px-4 text-right text-xs font-extrabold text-foreground font-mono w-[15%] align-middle">
-                          {formatCurrency(it.subtotal)}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+                          </td>
+                          <td className="py-2 px-2 text-center text-xs font-bold text-foreground w-[14%] align-middle">
+                            {it.cantidad}
+                          </td>
+                          <td className="py-2 px-2 text-right text-xs font-medium text-muted-foreground font-mono w-[16%] align-middle">
+                            {formatCurrency(it.precioUnitario)}
+                          </td>
+                          <td className="py-2 px-3 sm:px-4 text-right text-xs font-extrabold text-foreground font-mono w-[18%] align-middle">
+                            {formatCurrency(it.subtotal)}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
 
               {/* Fila de Costo de Envío / Flete si aplica */}
               {pedido.costoEnvio > 0 && (
@@ -611,18 +638,18 @@ export function OrderDetailsModal({
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
                   <Input
                     placeholder="Nota o número de operación (opcional)..."
                     value={abonoNotas}
                     onChange={(e) => setAbonoNotas(e.target.value)}
-                    className="h-8 bg-card border-border text-xs flex-1 rounded-lg"
+                    className="h-9 sm:h-8 bg-card border-border text-xs flex-1 rounded-xl sm:rounded-lg"
                   />
                   <Button
                     type="submit"
                     size="sm"
                     disabled={isSubmittingAbono}
-                    className="h-8 px-4 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold text-xs rounded-xl cursor-pointer flex-shrink-0 shadow-2xs transition-colors"
+                    className="h-9 sm:h-8 px-4 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold text-xs rounded-xl cursor-pointer flex-shrink-0 shadow-2xs transition-transform active:scale-95 w-full sm:w-auto"
                   >
                     {isSubmittingAbono ? 'Guardando...' : 'Registrar Abono'}
                   </Button>
@@ -635,12 +662,12 @@ export function OrderDetailsModal({
         {/* ========================================================================= */}
         {/* 3. FOOTER DEL MODAL                                                      */}
         {/* ========================================================================= */}
-        <div className="border-t border-border/70 bg-card/40 px-6 py-4 flex items-center justify-end gap-3 mt-auto shrink-0">
+        <div className="border-t border-border/70 bg-card/40 px-4 sm:px-6 py-3.5 sm:py-4 flex items-center justify-end gap-3 mt-auto shrink-0">
           <Button
             type="button"
             variant="ghost"
             onClick={onClose}
-            className="rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary h-10 px-5 transition-colors cursor-pointer"
+            className="rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary h-10 min-h-[44px] sm:min-h-0 sm:h-9 px-5 transition-colors cursor-pointer w-full sm:w-auto"
           >
             Cerrar
           </Button>

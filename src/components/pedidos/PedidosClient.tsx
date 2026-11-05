@@ -55,6 +55,7 @@ import { createCliente } from '@/actions/clientes'
 import { toast } from 'sonner'
 import { OrderDetailsModal } from './OrderDetailsModal'
 import { OrdersTableView } from './OrdersTableView'
+import { ThermalTicket80mmModal } from './ThermalTicket80mmModal'
 
 export interface ItemPedidoView {
   id: string
@@ -181,44 +182,44 @@ interface FormItemState {
 const ESTADOS_CONFIG: Record<EstadoPedido, { label: string; colorBg: string; colorText: string; colorBorder: string; icon: any }> = {
   PENDIENTE: {
     label: 'Pendiente',
-    colorBg: 'bg-[#FDF6E2]',
-    colorText: 'text-[#8C6D1F]',
-    colorBorder: 'border-[#E8D49B]',
+    colorBg: 'bg-amber-500/10',
+    colorText: 'text-amber-800 dark:text-amber-300',
+    colorBorder: 'border-amber-500/20',
     icon: Clock
   },
   PAGO_VALIDADO: {
     label: 'Pago Validado',
-    colorBg: 'bg-[#ECFDF5]',
-    colorText: 'text-[#065F46]',
-    colorBorder: 'border-[#A7F3D0]',
+    colorBg: 'bg-emerald-500/10',
+    colorText: 'text-emerald-800 dark:text-emerald-300',
+    colorBorder: 'border-emerald-500/20',
     icon: CheckCircle2
   },
   EN_PRODUCCION: {
     label: 'Preparando',
-    colorBg: 'bg-[#EBF3FB]',
-    colorText: 'text-[#2B6CB0]',
-    colorBorder: 'border-[#BEE3F8]',
+    colorBg: 'bg-sky-500/10',
+    colorText: 'text-sky-800 dark:text-sky-300',
+    colorBorder: 'border-sky-500/20',
     icon: Package
   },
   LISTO_ENTREGA: {
     label: 'Por Entregar',
-    colorBg: 'bg-[#FAF0F8]',
-    colorText: 'text-[#805AD5]',
-    colorBorder: 'border-[#E9D8FD]',
+    colorBg: 'bg-purple-500/10',
+    colorText: 'text-purple-800 dark:text-purple-300',
+    colorBorder: 'border-purple-500/20',
     icon: Package
   },
   ENTREGADO: {
     label: 'Entregado',
-    colorBg: 'bg-[#EBF7EE]',
-    colorText: 'text-[#1E5E3A]',
-    colorBorder: 'border-[#B4E3C0]',
+    colorBg: 'bg-emerald-500/10',
+    colorText: 'text-emerald-800 dark:text-emerald-300',
+    colorBorder: 'border-emerald-500/20',
     icon: CheckCircle2
   },
   CANCELADO: {
     label: 'Cancelado',
-    colorBg: 'bg-red-50',
-    colorText: 'text-[#A34335]',
-    colorBorder: 'border-red-200',
+    colorBg: 'bg-destructive/10',
+    colorText: 'text-destructive',
+    colorBorder: 'border-destructive/20',
     icon: X
   }
 }
@@ -250,7 +251,9 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos, cliente
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
-  const [dateRange, setDateRange] = useState<DateRange>(() => getPresetDateRange('TODO'))
+  const [dateRange, setDateRange] = useState<DateRange>(() => getPresetDateRange('ESTE_MES'))
+  const [selectedThermalPedido, setSelectedThermalPedido] = useState<PedidoView | null>(null)
+  const [activeTab, setActiveTab] = useState<'TODOS' | 'SEGUIMIENTO' | 'PRODUCCION' | 'ENTREGA'>('TODOS')
 
   // =========================================================================
   // ESTADO DEL FORMULARIO MULTIPRODUCTO
@@ -542,14 +545,21 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos, cliente
       })
 
       if (res.success && res.pedido) {
-        setPedidos(prev => [res.pedido as any, ...prev])
+        const nuevo = res.pedido as any
+        setPedidos(prev => [nuevo, ...prev])
         setIsNewOrderModalOpen(false)
         resetForm()
+        toast.success(`Pedido ${nuevo.codigo} registrado exitosamente`, {
+          action: {
+            label: 'Imprimir 80mm',
+            onClick: () => setSelectedThermalPedido(nuevo)
+          }
+        })
       } else {
-        alert(res.error || 'No se pudo crear el pedido')
+        toast.error(res.error || 'No se pudo crear el pedido')
       }
     } catch (err: any) {
-      alert(err.message || 'Error inesperado al crear el pedido')
+      toast.error(err.message || 'Error inesperado al crear el pedido')
     } finally {
       setIsSubmitting(false)
     }
@@ -736,38 +746,58 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos, cliente
   }
 
   // =========================================================================
-  // GENERAR RESUMEN PARA WHATSAPP
+  // GENERAR RESUMEN O SEGUIMIENTO PARA WHATSAPP
   // =========================================================================
   const copyWhatsAppTicket = (p: PedidoView) => {
-    const itemsText = p.items.map((it, idx) => {
-      const itemColores = (it.colores && it.colores.length > 0)
-        ? it.colores
-        : (it.colorFilamento ? [it.colorFilamento] : [])
-      const colorText = itemColores.length > 1
-        ? ` (Colores: ${itemColores.map(c => c.nombreColor).join(' + ')})`
-        : itemColores.length === 1
-        ? ` (Color: ${itemColores[0].nombreColor})`
-        : ''
-      const customText = it.personalizacion ? ` [Nota: ${it.personalizacion}]` : ''
-      return `  ${idx + 1}. *${it.nombreProductoSnapshot}* x${it.cantidad}${colorText}${customText} — S/ ${it.subtotal.toFixed(2)}`
-    }).join('\n')
+    let ticketMsg = ''
+    if (p.estado === 'PENDIENTE') {
+      ticketMsg = `¡Hola ${p.cliente}! 👋 Te saludamos de *NOVA Board Games*.\n\n` +
+        `Te escribimos para hacer seguimiento a tu cotización / pedido *${p.codigo}*:\n` +
+        p.items.map(it => `• ${it.cantidad}x *${it.nombreProductoSnapshot}* (S/ ${it.subtotal.toFixed(2)})`).join('\n') +
+        (p.costoEnvio > 0 ? `\n• Envío: S/ ${p.costoEnvio.toFixed(2)}` : '') +
+        `\n\n💰 *Total:* S/ ${p.total.toFixed(2)}` +
+        (p.saldoPendiente > 0 ? `\n⏳ *Saldo Pendiente:* S/ ${p.saldoPendiente.toFixed(2)}` : '') +
+        `\n\n¿Deseas confirmarlo para programar su impresión en taller? 🎲`
+    } else {
+      const itemsText = p.items.map((it, idx) => {
+        const itemColores = (it.colores && it.colores.length > 0)
+          ? it.colores
+          : (it.colorFilamento ? [it.colorFilamento] : [])
+        const colorText = itemColores.length > 1
+          ? ` (Colores: ${itemColores.map(c => c.nombreColor).join(' + ')})`
+          : itemColores.length === 1
+          ? ` (Color: ${itemColores[0].nombreColor})`
+          : ''
+        const customText = it.personalizacion ? ` [Nota: ${it.personalizacion}]` : ''
+        return `  ${idx + 1}. *${it.nombreProductoSnapshot}* x${it.cantidad}${colorText}${customText} — S/ ${it.subtotal.toFixed(2)}`
+      }).join('\n')
 
-    const envioText = p.costoEnvio > 0 ? `\n🚚 *Envío / Destino:* S/ ${p.costoEnvio.toFixed(2)} (${p.destinoEnvio || 'Agencia'})` : ''
-    const saldoText = p.saldoPendiente > 0 ? `\n⏳ *Saldo Pendiente:* S/ ${p.saldoPendiente.toFixed(2)}` : '\n✅ *Estado Pago:* 100% Cancelado'
+      const envioText = p.costoEnvio > 0 ? `\n🚚 *Envío / Destino:* S/ ${p.costoEnvio.toFixed(2)} (${p.destinoEnvio || 'Agencia'})` : ''
+      const saldoText = p.saldoPendiente > 0 ? `\n⏳ *Saldo Pendiente:* S/ ${p.saldoPendiente.toFixed(2)}` : '\n✅ *Estado Pago:* 100% Cancelado'
 
-    const ticketMsg = `*RESUMEN DE PEDIDO — ${p.codigo}*\n` +
-      `👤 *Cliente:* ${p.cliente}${p.dni ? ` (DNI: ${p.dni})` : ''}\n` +
-      `📅 *Fecha:* ${formatDate(p.fecha)}\n` +
-      (p.diaEntregaPrometida ? `📦 *Entrega Pactada:* ${p.diaEntregaPrometida}\n` : '') +
-      `\n*PRODUCTOS:* \n${itemsText}${envioText}\n\n` +
-      `💳 *Medio de Pago:* ${p.metodoPago || (p.pagos?.[0]?.metodoPago) || 'YAPE'}\n` +
-      `💰 *Total Pedido:* S/ ${p.total.toFixed(2)}\n` +
-      `💳 *Abonado:* S/ ${p.montoPagado.toFixed(2)}${saldoText}\n\n` +
-      `_¡Gracias por tu pedido en NOVA Board Games!_`
+      ticketMsg = `*RESUMEN DE PEDIDO — ${p.codigo}*\n` +
+        `👤 *Cliente:* ${p.cliente}${p.dni ? ` (DNI: ${p.dni})` : ''}\n` +
+        `📅 *Fecha:* ${formatDate(p.fecha)}\n` +
+        (p.diaEntregaPrometida ? `📦 *Entrega Pactada:* ${p.diaEntregaPrometida}\n` : '') +
+        `\n*PRODUCTOS:* \n${itemsText}${envioText}\n\n` +
+        `💳 *Medio de Pago:* ${p.metodoPago || (p.pagos?.[0]?.metodoPago) || 'YAPE'}\n` +
+        `💰 *Total Pedido:* S/ ${p.total.toFixed(2)}\n` +
+        `💳 *Abonado:* S/ ${p.montoPagado.toFixed(2)}${saldoText}\n\n` +
+        `_¡Gracias por tu pedido en NOVA Board Games!_`
+    }
 
     navigator.clipboard.writeText(ticketMsg)
     setCopiedNotification(true)
     setTimeout(() => setCopiedNotification(false), 2500)
+
+    if (p.telefono && p.telefono.trim()) {
+      const rawDigits = p.telefono.replace(/\D/g, '')
+      const phoneWithCode = rawDigits.length === 9 ? `51${rawDigits}` : rawDigits
+      window.open(`https://wa.me/${phoneWithCode}?text=${encodeURIComponent(ticketMsg)}`, '_blank')
+      toast.success(`Abriendo WhatsApp con ${p.cliente}`)
+    } else {
+      toast.success('¡Resumen de pedido copiado al portapapeles!')
+    }
   }
 
   // =========================================================================
@@ -776,6 +806,11 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos, cliente
   const filteredPedidos = useMemo(() => {
     return pedidos.filter(p => {
       if (!isDateInRange(p.fecha, dateRange.from, dateRange.to)) return false
+
+      // Tab operativa (Seguimiento, Producción, Entrega, Todos)
+      if (activeTab === 'SEGUIMIENTO' && p.estado !== 'PENDIENTE') return false
+      if (activeTab === 'PRODUCCION' && (p.estado !== 'EN_PRODUCCION' && p.estado !== 'PAGO_VALIDADO')) return false
+      if (activeTab === 'ENTREGA' && (p.estado !== 'LISTO_ENTREGA' && p.estado !== 'ENTREGADO')) return false
 
       const matchSearch = p.cliente.toLowerCase().includes(search.toLowerCase()) ||
         p.codigo.toLowerCase().includes(search.toLowerCase()) ||
@@ -794,7 +829,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos, cliente
 
       return true
     })
-  }, [pedidos, search, selectedEstadoFilter, selectedPagoFilter, dateRange])
+  }, [pedidos, search, selectedEstadoFilter, selectedPagoFilter, dateRange, activeTab])
 
   const handleSort = (field: 'fecha' | 'codigo' | 'cliente' | 'cantidad' | 'total' | 'saldoPendiente' | 'estado') => {
     if (sortField === field) {
@@ -864,203 +899,25 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos, cliente
   }, [pedidos, dateRange])
 
   return (
-    <div className="space-y-4 sm:space-y-5 animate-in fade-in duration-300">
+    <div className="space-y-4 animate-in fade-in duration-300">
       {/* ========================================================================= */}
-      {/* 1. CABECERA Y BOTÓN PRIMARIO DE PEDIDO                                    */}
+      {/* 1. CABECERA CON NAVEGADOR MENSUAL Y ACCIÓN PRINCIPAL                      */}
       {/* ========================================================================= */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-1">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-bold text-foreground tracking-tight">
-              Gestión de Pedidos
-            </h1>
-            <span className="text-2xl font-bold text-foreground">
-              ({kpis.totalPedidos})
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight flex items-center gap-2">
+            <span>Gestión de Pedidos & Ventas</span>
+            <span className="text-xs font-mono font-bold bg-secondary px-2.5 py-0.5 rounded-full border border-border text-muted-foreground">
+              {kpis.totalPedidos} {kpis.totalPedidos === 1 ? 'pedido' : 'pedidos'}
             </span>
-          </div>
+          </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Registro, control de pagos y envíos por cliente.
+            Taller 3D, tickets térmicos 80mm y seguimiento de clientes.
           </p>
         </div>
 
-        <Button
-          onClick={() => {
-            resetForm()
-            setIsNewOrderModalOpen(true)
-          }}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs h-10 px-4.5 rounded-xl shadow-md shadow-primary/20 flex items-center gap-2 transition-all active:scale-[0.98] cursor-pointer self-start sm:self-auto"
-        >
-          <Plus className="h-4 w-4 stroke-[2.5]" />
-          <span>+ Nuevo Pedido</span>
-        </Button>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 2. KPIS SUPERIORES DE FLUJO DE CAJA Y PEDIDOS (5 TARJETAS EN 1 FILA)      */}
-      {/* ========================================================================= */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 mb-6">
-        {/* KPI 1: Total Pedidos */}
-        <div className="bg-card border border-border rounded-xl p-4 shadow-2xs flex flex-col justify-between h-[96px]">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-              Total Pedidos
-            </span>
-            <div className="w-7 h-7 rounded-lg bg-secondary text-primary flex items-center justify-center shrink-0">
-              <Boxes className="h-3.5 w-3.5" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-1.5 flex-wrap">
-            <span className="text-xl font-extrabold text-foreground tracking-tight tabular-nums">
-              {kpis.totalPedidos}
-            </span>
-            <span className="text-[11px] text-muted-foreground">
-              ({kpis.totalPiezas} unidades)
-            </span>
-          </div>
-        </div>
-
-        {/* KPI 2: Preparando */}
-        <div className="bg-card border border-border rounded-xl p-4 shadow-2xs flex flex-col justify-between h-[96px]">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-              Preparando
-            </span>
-            <div className="w-7 h-7 rounded-lg bg-secondary text-primary flex items-center justify-center shrink-0">
-              <Package className="h-3.5 w-3.5" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-1.5 flex-wrap">
-            <span className="text-xl font-extrabold text-foreground tracking-tight tabular-nums">
-              {kpis.enProduccion}
-            </span>
-            <span className="text-[11px] text-muted-foreground">
-              en preparación
-            </span>
-          </div>
-        </div>
-
-        {/* KPI 3: Por Entregar */}
-        <div className="bg-card border border-border rounded-xl p-4 shadow-2xs flex flex-col justify-between h-[96px]">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-              Por Entregar
-            </span>
-            <div className="w-7 h-7 rounded-lg bg-secondary text-primary flex items-center justify-center shrink-0">
-              <Package className="h-3.5 w-3.5" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-1.5 flex-wrap">
-            <span className="text-xl font-extrabold text-foreground tracking-tight tabular-nums">
-              {kpis.listos}
-            </span>
-            <span className="text-[11px] text-muted-foreground">
-              listos
-            </span>
-          </div>
-        </div>
-
-        {/* KPI 4: Saldo por Cobrar */}
-        <div className="bg-card border border-border rounded-xl p-4 shadow-2xs flex flex-col justify-between h-[96px]">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-              Por Cobrar
-            </span>
-            <div className="w-7 h-7 rounded-lg bg-secondary text-primary flex items-center justify-center shrink-0">
-              <DollarSign className="h-3.5 w-3.5" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-xl font-extrabold text-foreground tracking-tight tabular-nums truncate">
-              {formatCurrency(kpis.saldoPorCobrar)}
-            </span>
-          </div>
-        </div>
-
-        {/* KPI 5: Cobrado */}
-        <div className="bg-card border border-border rounded-xl p-4 shadow-2xs flex flex-col justify-between h-[96px] col-span-2 sm:col-span-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-              Cobrado
-            </span>
-            <div className="w-7 h-7 rounded-lg bg-secondary text-primary flex items-center justify-center shrink-0">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-xl font-extrabold text-emerald-800 dark:text-emerald-300 tracking-tight tabular-nums truncate">
-              {formatCurrency(kpis.totalCobrado)}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 3. BARRA DE HERRAMIENTAS Y FILTROS (SIN TRUNCAMIENTOS)                    */}
-      {/* ========================================================================= */}
-      <div className="w-full bg-card border border-border rounded-2xl p-3 shadow-2xs mb-6 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-        {/* Izquierda: Buscador 100% elástico (sin vacío residual) */}
-        <div className="relative flex-1 w-full max-w-none lg:max-w-xl">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por cliente, código (#BG-XXX) o producto..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value)
-              setCurrentPage(1)
-            }}
-            className="h-10 w-full rounded-xl border border-input bg-background pl-10 pr-9 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-2xs"
-          />
-          {search && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearch('')
-                setCurrentPage(1)
-              }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-
-        {/* Derecha: Controles agrupados */}
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {/* Selector de Estado */}
-          <select
-            value={selectedEstadoFilter}
-            onChange={(e) => {
-              setSelectedEstadoFilter(e.target.value)
-              setCurrentPage(1)
-            }}
-            className="h-10 px-3 rounded-xl border border-input bg-background text-xs font-semibold text-foreground flex items-center gap-1.5 hover:bg-secondary/40 cursor-pointer focus:outline-none"
-          >
-            <option value="TODOS">Todos los estados ({pedidos.length})</option>
-            {Object.entries(ESTADOS_CONFIG).map(([stKey, conf]) => {
-              const count = pedidos.filter(p => p.estado === stKey).length
-              return (
-                <option key={stKey} value={stKey}>
-                  {conf.label} ({count})
-                </option>
-              )
-            })}
-          </select>
-
-          {/* Selector de Pagos */}
-          <select
-            value={selectedPagoFilter}
-            onChange={(e) => {
-              setSelectedPagoFilter(e.target.value)
-              setCurrentPage(1)
-            }}
-            className="h-10 px-3 rounded-xl border border-input bg-background text-xs font-semibold text-foreground flex items-center gap-1.5 hover:bg-secondary/40 cursor-pointer focus:outline-none"
-          >
-            <option value="TODOS">Todos los pagos</option>
-            <option value="PAGADO">100% Pagado</option>
-            <option value="PENDIENTE">Con Saldo</option>
-          </select>
-
-          {/* Navegador Temporal */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Navegador Temporal Mensual */}
           <DateFilterControl
             value={dateRange}
             onChange={(range) => {
@@ -1068,14 +925,259 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos, cliente
               setCurrentPage(1)
             }}
             variant="unified"
-            label="Filtrar Pedidos"
+            label="Mes de Operación"
             align="right"
           />
+
+          <Button
+            onClick={() => {
+              resetForm()
+              setIsNewOrderModalOpen(true)
+            }}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs h-9 sm:h-10 px-4 rounded-xl shadow-md shadow-primary/20 flex items-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
+          >
+            <Plus className="h-4 w-4 stroke-[2.5]" />
+            <span>+ Nuevo Pedido</span>
+          </Button>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* 4. REDISEÑO DE TABLA DE PEDIDOS (SEPARACIÓN DE COLUMNAS)                  */}
+      {/* 2. RIBBON DE CONTROL OPERATIVO & FINANCIERO (SENIOR UX - SIN REDUNDANCIAS) */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 bg-card border border-border rounded-2xl p-3 shadow-2xs">
+        {/* Métrica 1: Facturación del Mes */}
+        <div className="flex flex-col justify-between p-2">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="text-[10px] font-semibold uppercase tracking-wider">Facturado Mes</span>
+            <Boxes className="h-3.5 w-3.5 text-primary" />
+          </div>
+          <div className="mt-1">
+            <span className="text-lg font-bold text-foreground tracking-tight tabular-nums">
+              {formatCurrency(kpis.totalFacturado)}
+            </span>
+            <span className="text-[11px] text-muted-foreground block">
+              {kpis.totalPedidos} pedidos ({kpis.totalPiezas} piezas)
+            </span>
+          </div>
+        </div>
+
+        {/* Métrica 2: En Seguimiento / Cotizaciones */}
+        <div 
+          onClick={() => setActiveTab('SEGUIMIENTO')}
+          className={`flex flex-col justify-between p-2 rounded-xl transition-colors cursor-pointer border ${
+            activeTab === 'SEGUIMIENTO' 
+              ? 'bg-amber-500/10 border-amber-500/30' 
+              : 'hover:bg-secondary/60 border-transparent'
+          }`}
+        >
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+              En Seguimiento
+            </span>
+            <Clock className="h-3.5 w-3.5 text-amber-600" />
+          </div>
+          <div className="mt-1">
+            <span className="text-lg font-bold text-amber-700 dark:text-amber-400 tracking-tight tabular-nums">
+              {kpis.pendientes}
+            </span>
+            <span className="text-[11px] text-muted-foreground block">
+              cotizaciones / por validar
+            </span>
+          </div>
+        </div>
+
+        {/* Métrica 3: En Cola de Taller */}
+        <div 
+          onClick={() => setActiveTab('PRODUCCION')}
+          className={`flex flex-col justify-between p-2 rounded-xl transition-colors cursor-pointer border ${
+            activeTab === 'PRODUCCION' 
+              ? 'bg-sky-500/10 border-sky-500/30' 
+              : 'hover:bg-secondary/60 border-transparent'
+          }`}
+        >
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-sky-700 dark:text-sky-400">
+              En Taller
+            </span>
+            <Package className="h-3.5 w-3.5 text-sky-600" />
+          </div>
+          <div className="mt-1">
+            <span className="text-lg font-bold text-sky-700 dark:text-sky-400 tracking-tight tabular-nums">
+              {kpis.enProduccion + kpis.pagoValidados}
+            </span>
+            <span className="text-[11px] text-muted-foreground block">
+              en preparación / cola
+            </span>
+          </div>
+        </div>
+
+        {/* Métrica 4: Listos para Despacho */}
+        <div 
+          onClick={() => setActiveTab('ENTREGA')}
+          className={`flex flex-col justify-between p-2 rounded-xl transition-colors cursor-pointer border ${
+            activeTab === 'ENTREGA' 
+              ? 'bg-purple-500/10 border-purple-500/30' 
+              : 'hover:bg-secondary/60 border-transparent'
+          }`}
+        >
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-purple-700 dark:text-purple-400">
+              Por Entregar
+            </span>
+            <Truck className="h-3.5 w-3.5 text-purple-600" />
+          </div>
+          <div className="mt-1">
+            <span className="text-lg font-bold text-purple-700 dark:text-purple-400 tracking-tight tabular-nums">
+              {kpis.listos}
+            </span>
+            <span className="text-[11px] text-muted-foreground block">
+              listos para envío/recojo
+            </span>
+          </div>
+        </div>
+
+        {/* Métrica 5: Cuentas por Cobrar */}
+        <div className="flex flex-col justify-between p-2 col-span-2 sm:col-span-1">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="text-[10px] font-semibold uppercase tracking-wider">
+              Por Cobrar
+            </span>
+            <DollarSign className="h-3.5 w-3.5 text-primary" />
+          </div>
+          <div className="mt-1">
+            <span className={`text-lg font-bold tracking-tight tabular-nums ${
+              kpis.saldoPorCobrar > 0 ? 'text-destructive' : 'text-emerald-700 dark:text-emerald-400'
+            }`}>
+              {formatCurrency(kpis.saldoPorCobrar)}
+            </span>
+            <span className="text-[11px] text-muted-foreground block">
+              Cobrado: {formatCurrency(kpis.totalCobrado)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 3. PESTAÑAS OPERATIVAS & BARRA DE FILTROS                                 */}
+      {/* ========================================================================= */}
+      <div className="space-y-2.5">
+        {/* Pestañas de estado operativo (Senior UX) */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden">
+          <button
+            type="button"
+            onClick={() => setActiveTab('TODOS')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'TODOS'
+                ? 'bg-primary text-primary-foreground shadow-xs'
+                : 'bg-card border border-border text-muted-foreground hover:text-foreground hover:bg-secondary'
+            }`}
+          >
+            <span>Todos los Pedidos</span>
+            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-black/10 dark:bg-white/10">
+              {kpis.totalPedidos}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('SEGUIMIENTO')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'SEGUIMIENTO'
+                ? 'bg-amber-600 text-white shadow-xs'
+                : 'bg-card border border-border text-amber-700 dark:text-amber-400 hover:bg-amber-500/10'
+            }`}
+          >
+            <Clock className="w-3 h-3" />
+            <span>En Seguimiento / Posibles</span>
+            {kpis.pendientes > 0 && (
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-800 dark:text-amber-200 font-extrabold">
+                {kpis.pendientes}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('PRODUCCION')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'PRODUCCION'
+                ? 'bg-sky-600 text-white shadow-xs'
+                : 'bg-card border border-border text-muted-foreground hover:text-foreground hover:bg-secondary'
+            }`}
+          >
+            <Package className="w-3 h-3" />
+            <span>En Taller / Producción</span>
+            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-black/10 dark:bg-white/10">
+              {kpis.enProduccion + kpis.pagoValidados}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('ENTREGA')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'ENTREGA'
+                ? 'bg-purple-600 text-white shadow-xs'
+                : 'bg-card border border-border text-muted-foreground hover:text-foreground hover:bg-secondary'
+            }`}
+          >
+            <Truck className="w-3 h-3" />
+            <span>Listos & Entregados</span>
+            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-black/10 dark:bg-white/10">
+              {kpis.listos + kpis.entregados}
+            </span>
+          </button>
+        </div>
+
+        {/* Barra de Búsqueda y Filtros de Pago */}
+        <div className="w-full bg-card border border-border rounded-2xl p-2.5 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+          {/* Buscador Elástico */}
+          <div className="relative flex-1 w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por cliente, código (#BG-XXX), producto o WhatsApp..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value)
+                setCurrentPage(1)
+              }}
+              className="h-9 w-full rounded-xl border-input bg-background pl-9 pr-8 text-xs text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-2xs"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('')
+                  setCurrentPage(1)
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Filtros Secundarios */}
+          <div className="flex items-center gap-2 shrink-0">
+            <select
+              value={selectedPagoFilter}
+              onChange={(e) => {
+                setSelectedPagoFilter(e.target.value)
+                setCurrentPage(1)
+              }}
+              className="h-9 px-3 rounded-xl border border-input bg-background text-xs font-medium text-foreground hover:bg-secondary/40 cursor-pointer focus:outline-none"
+            >
+              <option value="TODOS">Todos los pagos</option>
+              <option value="PAGADO">100% Pagado</option>
+              <option value="PENDIENTE">Con Saldo Pendiente</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 4. REDISEÑO DE TABLA DE PEDIDOS (CON ACCIONES 80MM Y WHATSAPP)            */}
       {/* ========================================================================= */}
       <OrdersTableView
         pedidos={paginatedPedidos}
@@ -1087,6 +1189,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos, cliente
         onEditPedido={handleOpenEditModal}
         onEliminarPedido={handleEliminarPedido}
         onCopyWhatsApp={copyWhatsAppTicket}
+        onPrintThermal={(p) => setSelectedThermalPedido(p)}
         formatCurrency={formatCurrency}
         formatDate={formatDate}
         currentPage={currentPage}
@@ -1104,324 +1207,345 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos, cliente
       {/* 5. MODAL: NUEVO PEDIDO MULTIPRODUCTO (1 O MÁS PRODUCTOS)                  */}
       {/* ========================================================================= */}
       {isNewOrderModalOpen && (
-        <div className="fixed inset-0 isolate z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
-          <div className="bg-[#FFFFFF] border border-[#D4BEA7] rounded-3xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 isolate z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-card border border-border rounded-3xl shadow-2xl max-w-4xl w-full max-h-[94vh] sm:max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             {/* Modal Header */}
-            <div className="bg-[#FAF8F5] border-b border-[#E2D9CC] p-4 sm:p-5 flex items-center justify-between">
+            <div className="bg-secondary/40 border-b border-border p-4 sm:p-5 flex items-center justify-between shrink-0">
               <div>
-                <h3 className="text-lg sm:text-xl font-black text-[#241C15] flex items-center gap-2">
-                  <Boxes className="h-5 w-5 text-[#A36F4C]" />
-                  <span>Registrar Pedido Multiproducto</span>
+                <h3 className="text-lg sm:text-xl font-bold text-foreground flex items-center gap-2">
+                  <Boxes className="h-5 w-5 text-primary" />
+                  <span>Registrar Pedido</span>
                 </h3>
-                <p className="text-xs text-[#75695D] mt-0.5">
-                  Agrega 1 o más productos a este pedido y calcula el balance automáticamente.
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Agrega productos, asigna cliente y calcula balance y saldo automáticamente.
                 </p>
               </div>
 
               <button
                 onClick={() => setIsNewOrderModalOpen(false)}
-                className="p-1.5 rounded-xl hover:bg-[#EAE4DC] text-[#75695D] hover:text-[#241C15] transition-colors cursor-pointer"
+                className="p-1.5 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer active:scale-95"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Modal Form Body */}
-            <form onSubmit={handleSubmitNuevoPedido} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-              {/* SECCIÓN 1: DATOS DEL CLIENTE Y DESPACHO (BUSCADOR COMPLETO) */}
-              <OrderCustomerSection
-                clientSelectMode={clientSelectMode}
-                setClientSelectMode={setClientSelectMode}
-                clientesList={clientesList}
-                selectedClientOption={selectedClientOption}
-                onSelectClient={handleSelectClient}
-                onClearSelectedClient={handleClearSelectedClient}
-                onSwitchToNewClient={handleSwitchToNewClient}
-                clientSearchTerm={clientSearchTerm}
-                setClientSearchTerm={setClientSearchTerm}
-                isClientDropdownOpen={isClientDropdownOpen}
-                setIsClientDropdownOpen={setIsClientDropdownOpen}
-                filteredClientOptions={filteredClientOptions}
-                similarExistingClient={similarExistingClient}
-                formFecha={formFecha}
-                setFormFecha={setFormFecha}
-                formCliente={formCliente}
-                setFormCliente={setFormCliente}
-                formDni={formDni}
-                setFormDni={setFormDni}
-                formTelefono={formTelefono}
-                setFormTelefono={setFormTelefono}
-                formCanal={formCanal}
-                setFormCanal={setFormCanal}
-                formDestino={formDestino}
-                setFormDestino={setFormDestino}
-                formDiaEntrega={formDiaEntrega}
-                setFormDiaEntrega={setFormDiaEntrega}
-                isRegisteringClientInline={isRegisteringClientInline}
-                onRegisterClientInline={handleRegisterClientInline}
-              />
+            {/* Modal Form */}
+            <form onSubmit={handleSubmitNuevoPedido} className="flex-1 flex flex-col overflow-hidden min-h-0">
+              {/* Modal Form Scrollable Body */}
+              <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-6">
+                {/* SECCIÓN 1: DATOS DEL CLIENTE Y DESPACHO (BUSCADOR COMPLETO) */}
+                <OrderCustomerSection
+                  clientSelectMode={clientSelectMode}
+                  setClientSelectMode={setClientSelectMode}
+                  clientesList={clientesList}
+                  selectedClientOption={selectedClientOption}
+                  onSelectClient={handleSelectClient}
+                  onClearSelectedClient={handleClearSelectedClient}
+                  onSwitchToNewClient={handleSwitchToNewClient}
+                  clientSearchTerm={clientSearchTerm}
+                  setClientSearchTerm={setClientSearchTerm}
+                  isClientDropdownOpen={isClientDropdownOpen}
+                  setIsClientDropdownOpen={setIsClientDropdownOpen}
+                  filteredClientOptions={filteredClientOptions}
+                  similarExistingClient={similarExistingClient}
+                  formFecha={formFecha}
+                  setFormFecha={setFormFecha}
+                  formCliente={formCliente}
+                  setFormCliente={setFormCliente}
+                  formDni={formDni}
+                  setFormDni={setFormDni}
+                  formTelefono={formTelefono}
+                  setFormTelefono={setFormTelefono}
+                  formCanal={formCanal}
+                  setFormCanal={setFormCanal}
+                  formDestino={formDestino}
+                  setFormDestino={setFormDestino}
+                  formDiaEntrega={formDiaEntrega}
+                  setFormDiaEntrega={setFormDiaEntrega}
+                  isRegisteringClientInline={isRegisteringClientInline}
+                  onRegisterClientInline={handleRegisterClientInline}
+                />
 
-              {/* SECCIÓN 2: LISTA DE PRODUCTOS DINÁMICA */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between pb-1 border-b border-[#E2D9CC]">
-                  <span className="text-xs font-extrabold text-[#A36F4C] uppercase tracking-wider flex items-center gap-1.5">
-                    <ShoppingBag className="h-3.5 w-3.5" />
-                    2. Productos del Pedido ({formItems.length})
-                  </span>
-
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={addItem}
-                    className="h-7 px-2.5 rounded-lg bg-[#FAF8F5] hover:bg-[#EAE4DC] border border-[#D4BEA7] text-[#633E20] font-extrabold text-xs cursor-pointer flex items-center gap-1"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    <span>+ Agregar Otro Producto</span>
-                  </Button>
-                </div>
-
+                {/* SECCIÓN 2: LISTA DE PRODUCTOS DINÁMICA */}
                 <div className="space-y-3">
-                  {formItems.map((item, index) => {
-                    const selectedProd = productos.find(p => p.id === item.productoId)
-                    const itemSubtotal = (Number(item.precioUnitario) + Number(item.costoPackaging)) * Number(item.cantidad)
+                  <div className="flex items-center justify-between pb-1 border-b border-border">
+                    <span className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <ShoppingBag className="h-3.5 w-3.5 text-primary" />
+                      2. Productos del Pedido ({formItems.length})
+                    </span>
 
-                    return (
-                      <div
-                        key={item.id}
-                        className="p-3.5 sm:p-4 rounded-2xl bg-[#FAF8F5] border border-[#E2D9CC] space-y-3 relative"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-extrabold text-xs text-[#633E20] uppercase tracking-wide flex items-center gap-1.5">
-                            <Package className="h-3.5 w-3.5 text-[#A36F4C]" />
-                            Producto #{index + 1}
-                          </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={addItem}
+                      className="h-8 sm:h-7 px-3 sm:px-2.5 rounded-lg bg-secondary hover:bg-secondary/80 border border-border text-foreground font-bold text-xs cursor-pointer flex items-center gap-1 active:scale-95 transition-transform"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      <span>+ Agregar Producto</span>
+                    </Button>
+                  </div>
 
-                          {formItems.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeItem(item.id)}
-                              className="text-[#75695D] hover:text-[#A34335] text-xs flex items-center gap-1 font-semibold cursor-pointer"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              <span>Quitar</span>
-                            </button>
-                          )}
-                        </div>
+                  <div className="space-y-3">
+                    {formItems.map((item, index) => {
+                      const selectedProd = productos.find(p => p.id === item.productoId)
+                      const itemSubtotal = (Number(item.precioUnitario) + Number(item.costoPackaging)) * Number(item.cantidad)
 
-                        {/* Fila 1: Selector de Producto */}
-                        <div className="space-y-1">
-                          <Label className="text-[11px] text-[#241C15] font-bold">Producto *</Label>
-                          <select
-                            required
-                            value={item.productoId}
-                            onChange={(e) => updateItem(item.id, { productoId: e.target.value })}
-                            className="w-full h-9 rounded-xl border border-[#E2D9CC] bg-[#FFFFFF] px-3 text-xs text-[#241C15] font-bold"
-                          >
-                            {productos.map(p => (
-                              <option key={p.id} value={p.id}>
-                                {p.nombreModelo} ({p.lineaCategoria}) — Base: S/ {p.costoBase.toFixed(2)}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                      return (
+                        <div
+                          key={item.id}
+                          className="p-3.5 sm:p-4 rounded-2xl bg-secondary/30 border border-border space-y-3 relative"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-xs text-foreground uppercase tracking-wide flex items-center gap-1.5">
+                              <Package className="h-3.5 w-3.5 text-primary" />
+                              Producto #{index + 1}
+                            </span>
 
-                        {/* Fila 2: Nivel de Precio, Cantidad, Precio Unitario y Packaging */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                            {formItems.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => removeItem(item.id)}
+                                className="text-muted-foreground hover:text-destructive text-xs flex items-center gap-1 font-semibold cursor-pointer active:scale-95 transition-colors p-1"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                <span>Quitar</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Fila 1: Selector de Producto */}
                           <div className="space-y-1">
-                            <Label className="text-[10px] text-[#75695D] font-bold">Tier de Precio</Label>
+                            <Label className="text-[11px] text-foreground font-bold">Producto *</Label>
                             <select
-                              value={item.tipoPrecio}
-                              onChange={(e) => updateItem(item.id, { tipoPrecio: e.target.value as TipoPrecio })}
-                              className="w-full h-8 rounded-lg border border-[#E2D9CC] bg-[#FFFFFF] px-2 text-xs font-semibold"
+                              required
+                              value={item.productoId}
+                              onChange={(e) => updateItem(item.id, { productoId: e.target.value })}
+                              className="w-full h-9 rounded-xl border border-input bg-background px-3 text-xs text-foreground font-bold focus:outline-none focus:border-primary"
                             >
-                              <option value="MERCADO">Mercado</option>
-                              <option value="AMIGOS">Amigos</option>
-                              <option value="PERSONALIZADO">Personalizado</option>
+                              {productos.map(p => (
+                                <option key={p.id} value={p.id}>
+                                  {p.nombreModelo} ({p.lineaCategoria}) — Base: S/ {p.costoBase.toFixed(2)}
+                                </option>
+                              ))}
                             </select>
                           </div>
 
-                          <div className="space-y-1">
-                            <Label className="text-[10px] text-[#75695D] font-bold">Cantidad</Label>
-                            <Input
-                              type="number"
-                              min="1"
-                              placeholder="1"
-                              value={item.cantidad}
-                              onFocus={(e) => e.target.select()}
-                              onChange={(e) => updateItem(item.id, { cantidad: e.target.value })}
-                              className="h-8 bg-[#FFFFFF] border-[#E2D9CC] text-xs font-bold font-mono rounded-lg"
-                            />
+                          {/* Fila 2: Nivel de Precio, Cantidad, Precio Unitario y Packaging */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                            <div className="space-y-1">
+                              <Label className="text-[10px] text-muted-foreground font-bold">Tier de Precio</Label>
+                              <select
+                                value={item.tipoPrecio}
+                                onChange={(e) => updateItem(item.id, { tipoPrecio: e.target.value as TipoPrecio })}
+                                className="w-full h-8 rounded-lg border border-input bg-background px-2 text-xs font-semibold text-foreground focus:outline-none"
+                              >
+                                <option value="MERCADO">Mercado</option>
+                                <option value="AMIGOS">Amigos</option>
+                                <option value="PERSONALIZADO">Personalizado</option>
+                              </select>
+                            </div>
+
+                            <div className="space-y-1">
+                              <Label className="text-[10px] text-muted-foreground font-bold">Cantidad</Label>
+                              <Input
+                                type="number"
+                                min="1"
+                                placeholder="1"
+                                value={item.cantidad}
+                                onFocus={(e) => e.target.select()}
+                                onChange={(e) => updateItem(item.id, { cantidad: e.target.value })}
+                                className="h-8 bg-background border-input text-xs font-bold font-mono rounded-lg"
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <Label className="text-[10px] text-muted-foreground font-bold">Precio Unitario (S/)</Label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                value={item.precioUnitario}
+                                onFocus={(e) => e.target.select()}
+                                onChange={(e) => updateItem(item.id, { precioUnitario: e.target.value, tipoPrecio: 'PERSONALIZADO' })}
+                                className="h-8 bg-background border-input text-xs font-bold font-mono rounded-lg"
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <Label className="text-[10px] text-muted-foreground font-bold">Packaging (S/)</Label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                value={item.costoPackaging}
+                                onFocus={(e) => e.target.select()}
+                                onChange={(e) => updateItem(item.id, { costoPackaging: e.target.value })}
+                                className="h-8 bg-background border-input text-xs font-mono rounded-lg"
+                              />
+                            </div>
                           </div>
 
-                          <div className="space-y-1">
-                            <Label className="text-[10px] text-[#75695D] font-bold">Precio Unitario (S/)</Label>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              placeholder="0.00"
-                              value={item.precioUnitario}
-                              onFocus={(e) => e.target.select()}
-                              onChange={(e) => updateItem(item.id, { precioUnitario: e.target.value, tipoPrecio: 'PERSONALIZADO' })}
-                              className="h-8 bg-[#FFFFFF] border-[#E2D9CC] text-xs font-bold font-mono rounded-lg"
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                            <Label className="text-[10px] text-[#75695D] font-bold">Packaging (S/)</Label>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              placeholder="0.00"
-                              value={item.costoPackaging}
-                              onFocus={(e) => e.target.select()}
-                              onChange={(e) => updateItem(item.id, { costoPackaging: e.target.value })}
-                              className="h-8 bg-[#FFFFFF] border-[#E2D9CC] text-xs font-mono rounded-lg"
-                            />
+                          {/* Fila 3: Personalización y Subtotal */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-border/60 text-xs">
+                            <div className="flex-1">
+                              <Input
+                                placeholder="Notas o detalles del producto (opcional)..."
+                                value={item.personalizacion}
+                                onChange={(e) => updateItem(item.id, { personalizacion: e.target.value })}
+                                className="h-8 bg-background border-input text-xs rounded-lg"
+                              />
+                            </div>
+                            <div className="flex items-center gap-2 self-end sm:self-auto font-mono">
+                              <span className="text-[11px] text-muted-foreground">Subtotal Ítem:</span>
+                              <strong className="text-sm text-foreground font-black">{formatCurrency(itemSubtotal)}</strong>
+                            </div>
                           </div>
                         </div>
+                      )
+                    })}
+                  </div>
+                </div>
 
-                        {/* Fila 3: Personalización y Subtotal */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-[#E2D9CC]/60 text-xs">
-                          <div className="flex-1">
-                            <Input
-                              placeholder="Notas o detalles del producto (opcional)..."
-                              value={item.personalizacion}
-                              onChange={(e) => updateItem(item.id, { personalizacion: e.target.value })}
-                              className="h-8 bg-[#FFFFFF] border-[#E2D9CC] text-xs rounded-lg placeholder:text-[#75695D]"
-                            />
-                          </div>
-                          <div className="flex items-center gap-2 self-end sm:self-auto font-mono">
-                            <span className="text-[11px] text-[#75695D]">Subtotal Ítem:</span>
-                            <strong className="text-sm text-[#241C15] font-black">{formatCurrency(itemSubtotal)}</strong>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
+                {/* SECCIÓN 3: LIQUIDACIÓN FINANCIERA, ENVÍO Y ANTICIPO */}
+                <div className="p-4 rounded-2xl bg-secondary/30 border border-border space-y-4">
+                  <span className="text-xs font-bold text-foreground uppercase tracking-wider block">
+                    3. Totales del Pedido y Anticipo
+                  </span>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-foreground font-bold">Costo de Envío (S/)</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={formCostoEnvio}
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => setFormCostoEnvio(e.target.value)}
+                        className="bg-background border-input text-sm font-mono font-bold rounded-xl"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-xs text-foreground font-bold">Abono Inicial / Anticipo (S/)</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={formMontoPagado}
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => setFormMontoPagado(e.target.value)}
+                        className="bg-background border-emerald-500/30 text-sm font-mono font-bold text-emerald-700 dark:text-emerald-400 rounded-xl"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-xs text-foreground font-bold">Método de Pago</Label>
+                      <select
+                        value={formMetodoPago}
+                        onChange={(e) => setFormMetodoPago(e.target.value)}
+                        className="w-full h-9 rounded-xl border border-input bg-background px-3 text-sm text-foreground font-bold focus:outline-none"
+                      >
+                        <option value="YAPE">Yape</option>
+                        <option value="PLIN">Plin</option>
+                        <option value="BCP">Transferencia BCP</option>
+                        <option value="BBVA">Transferencia BBVA</option>
+                        <option value="EFECTIVO">Efectivo</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Botones de Anticipo Rápido */}
+                  <div className="space-y-1.5">
+                    <span className="text-[11px] font-bold text-muted-foreground block">Atajos de Anticipo:</span>
+                    <div className="grid grid-cols-3 gap-1.5 sm:flex sm:items-center">
+                      <button
+                        type="button"
+                        onClick={() => setFormMontoPagado((formTotalCalculado * 0.5).toFixed(2))}
+                        className="px-2.5 py-2 sm:py-1 rounded-xl sm:rounded-lg text-xs font-bold bg-secondary hover:bg-secondary/80 border border-border text-foreground cursor-pointer text-center active:scale-95 transition-transform"
+                      >
+                        50% (S/ {(formTotalCalculado * 0.5).toFixed(2)})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormMontoPagado(formTotalCalculado.toFixed(2))}
+                        className="px-2.5 py-2 sm:py-1 rounded-xl sm:rounded-lg text-xs font-bold bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 cursor-pointer text-center active:scale-95 transition-transform"
+                      >
+                        100% Total
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormMontoPagado('0')}
+                        className="px-2.5 py-2 sm:py-1 rounded-xl sm:rounded-lg text-xs font-bold bg-secondary hover:bg-secondary/80 border border-border text-muted-foreground cursor-pointer text-center active:scale-95 transition-transform"
+                      >
+                        S/ 0.00
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Resumen Totalizador */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 p-3 bg-card rounded-xl border border-border text-center font-mono">
+                    <div className="p-1 sm:p-0 bg-secondary/30 sm:bg-transparent rounded-lg sm:rounded-none">
+                      <span className="text-[10px] text-muted-foreground block uppercase">Subtotal</span>
+                      <strong className="text-sm font-bold text-foreground">{formatCurrency(formSubtotalCalculado)}</strong>
+                    </div>
+                    <div className="p-1 sm:p-0 bg-emerald-500/10 sm:bg-transparent rounded-lg sm:rounded-none">
+                      <span className="text-[10px] text-emerald-700 dark:text-emerald-400 block uppercase font-bold">TOTAL PEDIDO</span>
+                      <strong className="text-base font-black text-emerald-700 dark:text-emerald-400">{formatCurrency(formTotalCalculado)}</strong>
+                    </div>
+                    <div className="p-1 sm:p-0 bg-amber-500/10 sm:bg-transparent rounded-lg sm:rounded-none">
+                      <span className="text-[10px] text-amber-700 dark:text-amber-400 block uppercase font-bold">Saldo x Cobrar</span>
+                      <strong className="text-base font-black text-amber-700 dark:text-amber-400">S/ {formSaldoPendienteCalculado.toFixed(2)}</strong>
+                    </div>
+                  </div>
+
+                  {/* Checkbox Descontar Stock */}
+                  <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-foreground font-medium">
+                    <input
+                      type="checkbox"
+                      checked={formDescontarStock}
+                      onChange={(e) => setFormDescontarStock(e.target.checked)}
+                      className="rounded text-primary focus:ring-primary cursor-pointer h-4 w-4"
+                    />
+                    <span>Descontar automáticamente del stock disponible de los productos</span>
+                  </label>
                 </div>
               </div>
 
-              {/* SECCIÓN 3: LIQUIDACIÓN FINANCIERA, ENVÍO Y ANTICIPO */}
-              <div className="p-4 rounded-2xl bg-[#F8F6F2] border border-[#D4BEA7] space-y-4">
-                <span className="text-xs font-extrabold text-[#633E20] uppercase tracking-wider block">
-                  3. Totales del Pedido y Anticipo
-                </span>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-[#241C15] font-bold">Costo de Envío (S/)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={formCostoEnvio}
-                      onFocus={(e) => e.target.select()}
-                      onChange={(e) => setFormCostoEnvio(e.target.value)}
-                      className="bg-[#FFFFFF] border-[#E2D9CC] text-sm font-mono font-bold rounded-xl"
-                    />
+              {/* Modal Sticky Footer con Resumen en Vivo y Acciones Responsivas */}
+              <div className="shrink-0 sticky bottom-0 bg-card/95 backdrop-blur-md border-t border-border p-3.5 sm:p-4 z-20 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-lg">
+                {/* Resumen Financiero en Vivo */}
+                <div className="flex items-center justify-between sm:justify-start gap-4 font-mono px-1 sm:px-0">
+                  <div>
+                    <span className="text-[10px] text-muted-foreground uppercase font-bold block">Total Pedido</span>
+                    <span className="text-base font-black text-emerald-700 dark:text-emerald-400">{formatCurrency(formTotalCalculado)}</span>
                   </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs text-[#241C15] font-bold">Abono Inicial / Anticipo (S/)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={formMontoPagado}
-                      onFocus={(e) => e.target.select()}
-                      onChange={(e) => setFormMontoPagado(e.target.value)}
-                      className="bg-[#FFFFFF] border-[#B4E3C0] text-sm font-mono font-black text-[#1E5E3A] rounded-xl"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs text-[#241C15] font-bold">Método de Pago</Label>
-                    <select
-                      value={formMetodoPago}
-                      onChange={(e) => setFormMetodoPago(e.target.value)}
-                      className="w-full h-9 rounded-xl border border-[#E2D9CC] bg-[#FFFFFF] px-3 text-sm text-[#241C15] font-bold"
-                    >
-                      <option value="YAPE">Yape</option>
-                      <option value="PLIN">Plin</option>
-                      <option value="BCP">Transferencia BCP</option>
-                      <option value="BBVA">Transferencia BBVA</option>
-                      <option value="EFECTIVO">Efectivo</option>
-                    </select>
+                  <div className="h-7 w-px bg-border/80" />
+                  <div>
+                    <span className="text-[10px] text-amber-700 dark:text-amber-400 uppercase font-bold block">Saldo x Cobrar</span>
+                    <span className="text-base font-black text-amber-700 dark:text-amber-400">S/ {formSaldoPendienteCalculado.toFixed(2)}</span>
                   </div>
                 </div>
 
-                {/* Botones de Anticipo Rápido */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[11px] font-bold text-[#75695D]">Atajos de Anticipo:</span>
-                  <button
+                {/* Botones de Acción Táctiles */}
+                <div className="flex items-center gap-2">
+                  <Button
                     type="button"
-                    onClick={() => setFormMontoPagado((formTotalCalculado * 0.5).toFixed(2))}
-                    className="px-2.5 py-1 rounded-lg text-xs font-bold bg-[#FAF8F5] hover:bg-[#EAE4DC] border border-[#E2D9CC] text-[#241C15] cursor-pointer"
+                    variant="outline"
+                    onClick={() => setIsNewOrderModalOpen(false)}
+                    className="h-10 min-h-[44px] px-4 rounded-xl border-border text-muted-foreground hover:bg-secondary font-bold text-xs cursor-pointer flex-1 sm:flex-none active:scale-95 transition-transform"
                   >
-                    50% Anticipo (S/ {(formTotalCalculado * 0.5).toFixed(2)})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormMontoPagado(formTotalCalculado.toFixed(2))}
-                    className="px-2.5 py-1 rounded-lg text-xs font-bold bg-[#EBF7EE] hover:bg-[#D7EFE0] border border-[#B4E3C0] text-[#1E5E3A] cursor-pointer"
+                    Cancelar
+                  </Button>
+
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="h-10 min-h-[44px] px-6 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm shadow-md shadow-primary/20 cursor-pointer flex-1 sm:flex-none active:scale-95 transition-transform"
                   >
-                    100% Total (S/ {formTotalCalculado.toFixed(2)})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormMontoPagado('0')}
-                    className="px-2.5 py-1 rounded-lg text-xs font-bold bg-[#FAF8F5] hover:bg-[#EAE4DC] border border-[#E2D9CC] text-[#75695D] cursor-pointer"
-                  >
-                    S/ 0.00 (Contra entrega)
-                  </button>
+                    {isSubmitting ? 'Guardando...' : 'Crear Pedido'}
+                  </Button>
                 </div>
-
-              {/* Resumen Totalizador */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 p-3 bg-[#FFFFFF] rounded-xl border border-[#E2D9CC] text-center font-mono">
-                  <div className="p-1 sm:p-0 bg-[#FAF8F5] sm:bg-transparent rounded-lg sm:rounded-none">
-                    <span className="text-[10px] text-[#75695D] block uppercase">Subtotal</span>
-                    <strong className="text-sm font-bold text-[#241C15]">{formatCurrency(formSubtotalCalculado)}</strong>
-                  </div>
-                  <div className="p-1 sm:p-0 bg-[#EBF7EE]/60 sm:bg-transparent rounded-lg sm:rounded-none">
-                    <span className="text-[10px] text-[#1E5E3A] block uppercase font-bold">TOTAL PEDIDO</span>
-                    <strong className="text-base font-black text-[#1E5E3A]">{formatCurrency(formTotalCalculado)}</strong>
-                  </div>
-                  <div className="p-1 sm:p-0 bg-[#FDF6E2]/60 sm:bg-transparent rounded-lg sm:rounded-none">
-                    <span className="text-[10px] text-[#8C6D1F] block uppercase font-bold">Saldo x Cobrar</span>
-                    <strong className="text-base font-black text-[#8C6D1F]">S/ {formSaldoPendienteCalculado.toFixed(2)}</strong>
-                  </div>
-                </div>
-
-                {/* Checkbox Descontar Stock */}
-                <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-[#241C15] font-semibold">
-                  <input
-                    type="checkbox"
-                    checked={formDescontarStock}
-                    onChange={(e) => setFormDescontarStock(e.target.checked)}
-                    className="rounded text-[#1E5E3A] focus:ring-[#1E5E3A] cursor-pointer"
-                  />
-                  <span>Descontar automáticamente del stock disponible de los productos</span>
-                </label>
-              </div>
-
-              {/* Botones de Acción Modal */}
-              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsNewOrderModalOpen(false)}
-                  className="h-10 px-4 rounded-xl border-[#E2D9CC] text-[#75695D] hover:bg-[#F4EFEA] font-bold text-xs cursor-pointer w-full sm:w-auto"
-                >
-                  Cancelar
-                </Button>
-
-                <Button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="h-10 px-6 rounded-xl bg-[#1E5E3A] hover:bg-[#16482C] text-white font-black text-sm shadow-sm cursor-pointer w-full sm:w-auto"
-                >
-                  {isSubmitting ? 'Guardando...' : 'Crear Pedido Multiproducto'}
-                </Button>
               </div>
             </form>
           </div>
@@ -1435,6 +1559,7 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos, cliente
         isOpen={!!selectedPedidoDetail}
         pedido={selectedPedidoDetail}
         onClose={() => setSelectedPedidoDetail(null)}
+        onPrintThermal={(p) => setSelectedThermalPedido(p)}
         onEdit={(p) => {
           setSelectedPedidoDetail(null)
           handleOpenEditModal(p)
@@ -1447,24 +1572,33 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos, cliente
       />
 
       {/* ========================================================================= */}
+      {/* 8. MODAL: TICKET TÉRMICO 80MM PARA IMPRESIÓN POS                           */}
+      {/* ========================================================================= */}
+      <ThermalTicket80mmModal
+        isOpen={!!selectedThermalPedido}
+        pedido={selectedThermalPedido}
+        onClose={() => setSelectedThermalPedido(null)}
+      />
+
+      {/* ========================================================================= */}
       {/* 7. MODAL: EDITAR / MANTENIMIENTO DE PEDIDO                                */}
       {/* ========================================================================= */}
       {isEditModalOpen && editingPedido && (
         <div className="fixed inset-0 isolate z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 animate-in fade-in duration-200">
-          <div className="bg-[#FFFFFF] border border-[#D4BEA7] rounded-3xl shadow-2xl max-w-4xl w-full max-h-[94vh] sm:max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-card border border-border rounded-3xl shadow-2xl max-w-4xl w-full max-h-[94vh] sm:max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             {/* Modal Header */}
-            <div className="bg-[#FAF8F5] border-b border-[#E2D9CC] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="bg-secondary/40 border-b border-border p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <Badge className="bg-[#241C15] text-white font-mono font-black text-xs px-2.5 py-0.5 rounded-lg">
+                  <Badge className="bg-secondary text-foreground border border-border font-mono font-bold text-xs px-2.5 py-0.5 rounded-lg">
                     {editingPedido.codigo}
                   </Badge>
-                  <h3 className="text-lg sm:text-xl font-black text-[#241C15] flex items-center gap-1.5">
-                    <Pencil className="h-4.5 w-4.5 text-[#8C6D1F]" />
-                    <span>Editar / Mantenimiento de Pedido</span>
+                  <h3 className="text-lg sm:text-xl font-bold text-foreground flex items-center gap-1.5">
+                    <Pencil className="h-4.5 w-4.5 text-primary" />
+                    <span>Editar Pedido</span>
                   </h3>
                 </div>
-                <p className="text-xs text-[#75695D] mt-0.5">
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Modifica cliente, fecha, notas, estado, y añade/quita/modifica los productos asignados.
                 </p>
               </div>
@@ -1474,290 +1608,311 @@ export function PedidosClient({ pedidosIniciales, productos, filamentos, cliente
                   setIsEditModalOpen(false)
                   setEditingPedido(null)
                 }}
-                className="p-1.5 rounded-xl hover:bg-[#EAE4DC] text-[#75695D] hover:text-[#241C15] transition-colors cursor-pointer self-end sm:self-auto"
+                className="p-1.5 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer self-end sm:self-auto"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Modal Form Body */}
-            <form onSubmit={handleSubmitEditPedido} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-              {/* SECCIÓN 1: ESTADO Y DATOS DEL CLIENTE (BUSCADOR COMPLETO) */}
-              <OrderCustomerSection
-                clientSelectMode={clientSelectMode}
-                setClientSelectMode={setClientSelectMode}
-                clientesList={clientesList}
-                selectedClientOption={selectedClientOption}
-                onSelectClient={handleSelectClient}
-                onClearSelectedClient={handleClearSelectedClient}
-                onSwitchToNewClient={handleSwitchToNewClient}
-                clientSearchTerm={clientSearchTerm}
-                setClientSearchTerm={setClientSearchTerm}
-                isClientDropdownOpen={isClientDropdownOpen}
-                setIsClientDropdownOpen={setIsClientDropdownOpen}
-                filteredClientOptions={filteredClientOptions}
-                similarExistingClient={similarExistingClient}
-                formFecha={formFecha}
-                setFormFecha={setFormFecha}
-                formCliente={formCliente}
-                setFormCliente={setFormCliente}
-                formDni={formDni}
-                setFormDni={setFormDni}
-                formTelefono={formTelefono}
-                setFormTelefono={setFormTelefono}
-                formCanal={formCanal}
-                setFormCanal={setFormCanal}
-                formDestino={formDestino}
-                setFormDestino={setFormDestino}
-                formDiaEntrega={formDiaEntrega}
-                setFormDiaEntrega={setFormDiaEntrega}
-                isRegisteringClientInline={isRegisteringClientInline}
-                onRegisterClientInline={handleRegisterClientInline}
-                headerExtra={
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-[#75695D]">Estado:</span>
-                    <select
-                      value={editEstado}
-                      onChange={(e) => setEditEstado(e.target.value as EstadoPedido)}
-                      className="text-xs font-extrabold rounded-xl px-3 py-1 border border-[#D4BEA7] bg-[#FDF6E2] text-[#8C6D1F] cursor-pointer"
-                    >
-                      {Object.entries(ESTADOS_CONFIG).map(([stKey, conf]) => (
-                        <option key={stKey} value={stKey}>
-                          {conf.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                }
-              />
-
-              <div className="space-y-1">
-                <Label className="text-xs text-[#241C15] font-bold">Notas del Pedido</Label>
-                <Input
-                  placeholder="Notas internas, indicaciones de acabado, etc..."
-                  value={formNotas}
-                  onChange={(e) => setFormNotas(e.target.value)}
-                  className="bg-[#FAF8F5] border-[#E2D9CC] text-sm rounded-xl"
+            {/* Modal Form */}
+            <form onSubmit={handleSubmitEditPedido} className="flex-1 flex flex-col overflow-hidden min-h-0">
+              {/* Modal Form Scrollable Body */}
+              <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-6">
+                {/* SECCIÓN 1: ESTADO Y DATOS DEL CLIENTE (BUSCADOR COMPLETO) */}
+                <OrderCustomerSection
+                  clientSelectMode={clientSelectMode}
+                  setClientSelectMode={setClientSelectMode}
+                  clientesList={clientesList}
+                  selectedClientOption={selectedClientOption}
+                  onSelectClient={handleSelectClient}
+                  onClearSelectedClient={handleClearSelectedClient}
+                  onSwitchToNewClient={handleSwitchToNewClient}
+                  clientSearchTerm={clientSearchTerm}
+                  setClientSearchTerm={setClientSearchTerm}
+                  isClientDropdownOpen={isClientDropdownOpen}
+                  setIsClientDropdownOpen={setIsClientDropdownOpen}
+                  filteredClientOptions={filteredClientOptions}
+                  similarExistingClient={similarExistingClient}
+                  formFecha={formFecha}
+                  setFormFecha={setFormFecha}
+                  formCliente={formCliente}
+                  setFormCliente={setFormCliente}
+                  formDni={formDni}
+                  setFormDni={setFormDni}
+                  formTelefono={formTelefono}
+                  setFormTelefono={setFormTelefono}
+                  formCanal={formCanal}
+                  setFormCanal={setFormCanal}
+                  formDestino={formDestino}
+                  setFormDestino={setFormDestino}
+                  formDiaEntrega={formDiaEntrega}
+                  setFormDiaEntrega={setFormDiaEntrega}
+                  isRegisteringClientInline={isRegisteringClientInline}
+                  onRegisterClientInline={handleRegisterClientInline}
+                  headerExtra={
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-muted-foreground">Estado:</span>
+                      <select
+                        value={editEstado}
+                        onChange={(e) => setEditEstado(e.target.value as EstadoPedido)}
+                        className="text-xs font-bold rounded-xl px-3 py-1 border border-input bg-background text-foreground cursor-pointer focus:outline-none"
+                      >
+                        {Object.entries(ESTADOS_CONFIG).map(([stKey, conf]) => (
+                          <option key={stKey} value={stKey}>
+                            {conf.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  }
                 />
-              </div>
 
-              {/* SECCIÓN 2: LISTA DE PRODUCTOS DINÁMICA */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between pb-1 border-b border-[#E2D9CC]">
-                  <span className="text-xs font-extrabold text-[#A36F4C] uppercase tracking-wider flex items-center gap-1.5">
-                    <ShoppingBag className="h-3.5 w-3.5" />
-                    2. Productos Asignados ({formItems.length})
-                  </span>
-
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={addItem}
-                    className="h-7 px-2.5 rounded-lg bg-[#FAF8F5] hover:bg-[#EAE4DC] border border-[#D4BEA7] text-[#633E20] font-extrabold text-xs cursor-pointer flex items-center gap-1"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    <span>+ Agregar Otro Producto</span>
-                  </Button>
+                <div className="space-y-1">
+                  <Label className="text-xs text-foreground font-bold">Notas del Pedido</Label>
+                  <Input
+                    placeholder="Notas internas, indicaciones de acabado, etc..."
+                    value={formNotas}
+                    onChange={(e) => setFormNotas(e.target.value)}
+                    className="bg-background border-input text-sm rounded-xl"
+                  />
                 </div>
 
+                {/* SECCIÓN 2: LISTA DE PRODUCTOS DINÁMICA */}
                 <div className="space-y-3">
-                  {formItems.map((item, index) => {
-                    const itemSubtotal = (Number(item.precioUnitario) + Number(item.costoPackaging)) * Number(item.cantidad)
+                  <div className="flex items-center justify-between pb-1 border-b border-border">
+                    <span className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <ShoppingBag className="h-3.5 w-3.5 text-primary" />
+                      2. Productos Asignados ({formItems.length})
+                    </span>
 
-                    return (
-                      <div
-                        key={item.id}
-                        className="p-3.5 sm:p-4 rounded-2xl bg-[#FAF8F5] border border-[#E2D9CC] space-y-3 relative"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-extrabold text-xs text-[#633E20] uppercase tracking-wide flex items-center gap-1.5">
-                            <Package className="h-3.5 w-3.5 text-[#A36F4C]" />
-                            Producto #{index + 1}
-                          </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={addItem}
+                      className="h-8 sm:h-7 px-3 sm:px-2.5 rounded-lg bg-secondary hover:bg-secondary/80 border border-border text-foreground font-bold text-xs cursor-pointer flex items-center gap-1 active:scale-95 transition-transform"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      <span>+ Agregar Producto</span>
+                    </Button>
+                  </div>
 
-                          {formItems.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeItem(item.id)}
-                              className="text-[#75695D] hover:text-[#A34335] text-xs flex items-center gap-1 font-semibold cursor-pointer"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              <span>Quitar</span>
-                            </button>
-                          )}
-                        </div>
+                  <div className="space-y-3">
+                    {formItems.map((item, index) => {
+                      const itemSubtotal = (Number(item.precioUnitario) + Number(item.costoPackaging)) * Number(item.cantidad)
 
-                        {/* Fila 1: Selector de Producto */}
-                        <div className="space-y-1">
-                          <Label className="text-[11px] text-[#241C15] font-bold">Producto *</Label>
-                          <select
-                            required
-                            value={item.productoId}
-                            onChange={(e) => updateItem(item.id, { productoId: e.target.value })}
-                            className="w-full h-9 rounded-xl border border-[#E2D9CC] bg-[#FFFFFF] px-3 text-xs text-[#241C15] font-bold"
-                          >
-                            {productos.map(p => (
-                              <option key={p.id} value={p.id}>
-                                {p.nombreModelo} ({p.lineaCategoria}) — Base: S/ {p.costoBase.toFixed(2)}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                      return (
+                        <div
+                          key={item.id}
+                          className="p-3.5 sm:p-4 rounded-2xl bg-secondary/30 border border-border space-y-3 relative"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-xs text-foreground uppercase tracking-wide flex items-center gap-1.5">
+                              <Package className="h-3.5 w-3.5 text-primary" />
+                              Producto #{index + 1}
+                            </span>
 
-                        {/* Fila 2: Nivel de Precio, Cantidad, Precio Unitario y Packaging */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                            {formItems.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => removeItem(item.id)}
+                                className="text-muted-foreground hover:text-destructive text-xs flex items-center gap-1 font-semibold cursor-pointer active:scale-95 transition-colors p-1"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                <span>Quitar</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Fila 1: Selector de Producto */}
                           <div className="space-y-1">
-                            <Label className="text-[10px] text-[#75695D] font-bold">Tier de Precio</Label>
+                            <Label className="text-[11px] text-foreground font-bold">Producto *</Label>
                             <select
-                              value={item.tipoPrecio}
-                              onChange={(e) => updateItem(item.id, { tipoPrecio: e.target.value as TipoPrecio })}
-                              className="w-full h-8 rounded-lg border border-[#E2D9CC] bg-[#FFFFFF] px-2 text-xs font-semibold"
+                              required
+                              value={item.productoId}
+                              onChange={(e) => updateItem(item.id, { productoId: e.target.value })}
+                              className="w-full h-9 rounded-xl border border-input bg-background px-3 text-xs text-foreground font-bold focus:outline-none"
                             >
-                              <option value="MERCADO">Mercado</option>
-                              <option value="AMIGOS">Amigos</option>
-                              <option value="PERSONALIZADO">Personalizado</option>
+                              {productos.map(p => (
+                                <option key={p.id} value={p.id}>
+                                  {p.nombreModelo} ({p.lineaCategoria}) — Base: S/ {p.costoBase.toFixed(2)}
+                                </option>
+                              ))}
                             </select>
                           </div>
 
-                          <div className="space-y-1">
-                            <Label className="text-[10px] text-[#75695D] font-bold">Cantidad</Label>
-                            <Input
-                              type="number"
-                              min="1"
-                              placeholder="1"
-                              value={item.cantidad}
-                              onFocus={(e) => e.target.select()}
-                              onChange={(e) => updateItem(item.id, { cantidad: e.target.value })}
-                              className="h-8 bg-[#FFFFFF] border-[#E2D9CC] text-xs font-bold font-mono rounded-lg"
-                            />
+                          {/* Fila 2: Nivel de Precio, Cantidad, Precio Unitario y Packaging */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                            <div className="space-y-1">
+                              <Label className="text-[10px] text-muted-foreground font-bold">Tier de Precio</Label>
+                              <select
+                                value={item.tipoPrecio}
+                                onChange={(e) => updateItem(item.id, { tipoPrecio: e.target.value as TipoPrecio })}
+                                className="w-full h-8 rounded-lg border border-input bg-background px-2 text-xs font-semibold text-foreground focus:outline-none"
+                              >
+                                <option value="MERCADO">Mercado</option>
+                                <option value="AMIGOS">Amigos</option>
+                                <option value="PERSONALIZADO">Personalizado</option>
+                              </select>
+                            </div>
+
+                            <div className="space-y-1">
+                              <Label className="text-[10px] text-muted-foreground font-bold">Cantidad</Label>
+                              <Input
+                                type="number"
+                                min="1"
+                                placeholder="1"
+                                value={item.cantidad}
+                                onFocus={(e) => e.target.select()}
+                                onChange={(e) => updateItem(item.id, { cantidad: e.target.value })}
+                                className="h-8 bg-background border-input text-xs font-bold font-mono rounded-lg"
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <Label className="text-[10px] text-muted-foreground font-bold">Precio Unitario (S/)</Label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                value={item.precioUnitario}
+                                onFocus={(e) => e.target.select()}
+                                onChange={(e) => updateItem(item.id, { precioUnitario: e.target.value, tipoPrecio: 'PERSONALIZADO' })}
+                                className="h-8 bg-background border-input text-xs font-bold font-mono rounded-lg"
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <Label className="text-[10px] text-muted-foreground font-bold">Packaging (S/)</Label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                value={item.costoPackaging}
+                                onFocus={(e) => e.target.select()}
+                                onChange={(e) => updateItem(item.id, { costoPackaging: e.target.value })}
+                                className="h-8 bg-background border-input text-xs font-mono rounded-lg"
+                              />
+                            </div>
                           </div>
 
-                          <div className="space-y-1">
-                            <Label className="text-[10px] text-[#75695D] font-bold">Precio Unitario (S/)</Label>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              placeholder="0.00"
-                              value={item.precioUnitario}
-                              onFocus={(e) => e.target.select()}
-                              onChange={(e) => updateItem(item.id, { precioUnitario: e.target.value, tipoPrecio: 'PERSONALIZADO' })}
-                              className="h-8 bg-[#FFFFFF] border-[#E2D9CC] text-xs font-bold font-mono rounded-lg"
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                            <Label className="text-[10px] text-[#75695D] font-bold">Packaging (S/)</Label>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              placeholder="0.00"
-                              value={item.costoPackaging}
-                              onFocus={(e) => e.target.select()}
-                              onChange={(e) => updateItem(item.id, { costoPackaging: e.target.value })}
-                              className="h-8 bg-[#FFFFFF] border-[#E2D9CC] text-xs font-mono rounded-lg"
-                            />
+                          {/* Fila 3: Personalización y Subtotal */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-border/60 text-xs">
+                            <div className="flex-1">
+                              <Input
+                                placeholder="Notas o detalles del producto (opcional)..."
+                                value={item.personalizacion}
+                                onChange={(e) => updateItem(item.id, { personalizacion: e.target.value })}
+                                className="h-8 bg-background border-input text-xs rounded-lg"
+                              />
+                            </div>
+                            <div className="flex items-center gap-2 self-end sm:self-auto font-mono">
+                              <span className="text-[11px] text-muted-foreground">Subtotal Ítem:</span>
+                              <strong className="text-sm text-foreground font-black">{formatCurrency(itemSubtotal)}</strong>
+                            </div>
                           </div>
                         </div>
-
-                        {/* Fila 3: Personalización y Subtotal */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-[#E2D9CC]/60 text-xs">
-                          <div className="flex-1">
-                            <Input
-                              placeholder="Notas o detalles del producto (opcional)..."
-                              value={item.personalizacion}
-                              onChange={(e) => updateItem(item.id, { personalizacion: e.target.value })}
-                              className="h-8 bg-[#FFFFFF] border-[#E2D9CC] text-xs rounded-lg placeholder:text-[#75695D]"
-                            />
-                          </div>
-                          <div className="flex items-center gap-2 self-end sm:self-auto font-mono">
-                            <span className="text-[11px] text-[#75695D]">Subtotal Ítem:</span>
-                            <strong className="text-sm text-[#241C15] font-black">{formatCurrency(itemSubtotal)}</strong>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* SECCIÓN 3: LIQUIDACIÓN FINANCIERA Y ENVÍO */}
-              <div className="p-4 rounded-2xl bg-[#F8F6F2] border border-[#D4BEA7] space-y-4">
-                <span className="text-xs font-extrabold text-[#633E20] uppercase tracking-wider block">
-                  3. Totales del Pedido y Saldo
-                </span>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-[#241C15] font-bold">Costo de Envío / Flete (S/)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={formCostoEnvio}
-                      onFocus={(e) => e.target.select()}
-                      onChange={(e) => setFormCostoEnvio(e.target.value)}
-                      className="bg-[#FFFFFF] border-[#E2D9CC] text-sm font-mono font-bold rounded-xl"
-                    />
-                  </div>
-
-                  <div className="p-3 bg-[#FAF8F5] rounded-xl border border-[#E2D9CC] flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] text-[#75695D] block uppercase font-bold">Abonos Ya Cobrados</span>
-                      <span className="text-xs text-[#75695D]">({editingPedido.pagos.length} pagos registrados)</span>
-                    </div>
-                    <strong className="text-base font-black text-[#1E5E3A] font-mono">
-                      +{formatCurrency(editingPedido.montoPagado)}
-                    </strong>
+                      )
+                    })}
                   </div>
                 </div>
 
-                {/* Resumen Totalizador */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 p-3 bg-[#FFFFFF] rounded-xl border border-[#E2D9CC] text-center font-mono">
-                  <div className="p-1 sm:p-0 bg-[#FAF8F5] sm:bg-transparent rounded-lg sm:rounded-none">
-                    <span className="text-[10px] text-[#75695D] block uppercase">Subtotal Ítems</span>
-                    <strong className="text-sm font-bold text-[#241C15]">{formatCurrency(formSubtotalCalculado)}</strong>
-                  </div>
-                  <div className="p-1 sm:p-0 bg-[#EBF7EE]/60 sm:bg-transparent rounded-lg sm:rounded-none">
-                    <span className="text-[10px] text-[#1E5E3A] block uppercase font-bold">NUEVO TOTAL</span>
-                    <strong className="text-base font-black text-[#1E5E3A]">{formatCurrency(formTotalCalculado)}</strong>
-                  </div>
-                  <div className="p-1 sm:p-0 bg-[#FDF6E2]/60 sm:bg-transparent rounded-lg sm:rounded-none">
-                    <span className="text-[10px] text-[#8C6D1F] block uppercase font-bold">Saldo x Cobrar</span>
-                    <strong className="text-base font-black text-[#8C6D1F]">
-                      S/ {Math.max(0, formTotalCalculado - editingPedido.montoPagado).toFixed(2)}
-                    </strong>
-                  </div>
-                </div>
-
-                <div className="p-2.5 bg-[#FAF8F5] rounded-xl border border-[#E2D9CC] text-[11px] text-[#75695D] flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-[#A36F4C] flex-shrink-0" />
-                  <span>
-                    Los abonos previos (S/ {editingPedido.montoPagado.toFixed(2)}) se conservan intactos. Si el total del pedido cambia, el saldo pendiente se recalcula automáticamente.
+                {/* SECCIÓN 3: LIQUIDACIÓN FINANCIERA Y ENVÍO */}
+                <div className="p-4 rounded-2xl bg-secondary/30 border border-border space-y-4">
+                  <span className="text-xs font-bold text-foreground uppercase tracking-wider block">
+                    3. Totales del Pedido y Saldo
                   </span>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-foreground font-bold">Costo de Envío / Flete (S/)</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={formCostoEnvio}
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => setFormCostoEnvio(e.target.value)}
+                        className="bg-background border-input text-sm font-mono font-bold rounded-xl"
+                      />
+                    </div>
+
+                    <div className="p-3 bg-card rounded-xl border border-border flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] text-muted-foreground block uppercase font-bold">Abonos Ya Cobrados</span>
+                        <span className="text-xs text-muted-foreground">({editingPedido.pagos.length} pagos registrados)</span>
+                      </div>
+                      <strong className="text-base font-black text-emerald-700 dark:text-emerald-400 font-mono">
+                        +{formatCurrency(editingPedido.montoPagado)}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {/* Resumen Totalizador */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 p-3 bg-card rounded-xl border border-border text-center font-mono">
+                    <div className="p-1 sm:p-0 bg-secondary/30 sm:bg-transparent rounded-lg sm:rounded-none">
+                      <span className="text-[10px] text-muted-foreground block uppercase">Subtotal Ítems</span>
+                      <strong className="text-sm font-bold text-foreground">{formatCurrency(formSubtotalCalculado)}</strong>
+                    </div>
+                    <div className="p-1 sm:p-0 bg-emerald-500/10 sm:bg-transparent rounded-lg sm:rounded-none">
+                      <span className="text-[10px] text-emerald-700 dark:text-emerald-400 block uppercase font-bold">NUEVO TOTAL</span>
+                      <strong className="text-base font-black text-emerald-700 dark:text-emerald-400">{formatCurrency(formTotalCalculado)}</strong>
+                    </div>
+                    <div className="p-1 sm:p-0 bg-amber-500/10 sm:bg-transparent rounded-lg sm:rounded-none">
+                      <span className="text-[10px] text-amber-700 dark:text-amber-400 block uppercase font-bold">Saldo x Cobrar</span>
+                      <strong className="text-base font-black text-amber-700 dark:text-amber-400">
+                        S/ {Math.max(0, formTotalCalculado - editingPedido.montoPagado).toFixed(2)}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 bg-secondary/40 rounded-xl border border-border text-[11px] text-muted-foreground flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-primary flex-shrink-0" />
+                    <span>
+                      Los abonos previos (S/ {editingPedido.montoPagado.toFixed(2)}) se conservan intactos. Si el total del pedido cambia, el saldo pendiente se recalcula automáticamente.
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* Botones de Acción Modal */}
-              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setIsEditModalOpen(false)
-                    setEditingPedido(null)
-                  }}
-                  className="h-10 px-4 rounded-xl border-[#E2D9CC] text-[#75695D] hover:bg-[#F4EFEA] font-bold text-xs cursor-pointer w-full sm:w-auto"
-                >
-                  Cancelar
-                </Button>
+              {/* Modal Sticky Footer con Resumen en Vivo y Acciones Responsivas */}
+              <div className="shrink-0 sticky bottom-0 bg-card/95 backdrop-blur-md border-t border-border p-3.5 sm:p-4 z-20 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-lg">
+                {/* Resumen Financiero en Vivo */}
+                <div className="flex items-center justify-between sm:justify-start gap-4 font-mono px-1 sm:px-0">
+                  <div>
+                    <span className="text-[10px] text-muted-foreground uppercase font-bold block">Nuevo Total</span>
+                    <span className="text-base font-black text-emerald-700 dark:text-emerald-400">{formatCurrency(formTotalCalculado)}</span>
+                  </div>
+                  <div className="h-7 w-px bg-border/80" />
+                  <div>
+                    <span className="text-[10px] text-amber-700 dark:text-amber-400 uppercase font-bold block">Saldo x Cobrar</span>
+                    <span className="text-base font-black text-amber-700 dark:text-amber-400">
+                      S/ {Math.max(0, formTotalCalculado - editingPedido.montoPagado).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
 
-                <Button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="h-10 px-6 rounded-xl bg-[#8C6D1F] hover:bg-[#705618] text-white font-black text-sm shadow-sm cursor-pointer flex items-center justify-center gap-1.5 w-full sm:w-auto"
-                >
-                  <Pencil className="h-4 w-4" />
-                  <span>{isSubmitting ? 'Guardando...' : 'Guardar Cambios del Pedido'}</span>
-                </Button>
+                {/* Botones de Acción Táctiles */}
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setIsEditModalOpen(false)
+                      setEditingPedido(null)
+                    }}
+                    className="h-10 min-h-[44px] px-4 rounded-xl border-border text-muted-foreground hover:bg-secondary font-bold text-xs cursor-pointer flex-1 sm:flex-none active:scale-95 transition-transform"
+                  >
+                    Cancelar
+                  </Button>
+
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="h-10 min-h-[44px] px-6 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm shadow-md shadow-primary/20 cursor-pointer flex items-center justify-center gap-1.5 flex-1 sm:flex-none active:scale-95 transition-transform"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    <span>{isSubmitting ? 'Guardando...' : 'Guardar Cambios'}</span>
+                  </Button>
+                </div>
               </div>
             </form>
           </div>

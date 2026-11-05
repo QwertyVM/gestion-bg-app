@@ -38,7 +38,7 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="flex h-[100dvh] min-h-[100dvh] w-full bg-[#F8F6F2] overflow-hidden text-[#241C15] relative">
+    <div className="flex h-[100dvh] min-h-[100dvh] w-full bg-background overflow-hidden text-foreground relative">
       {/* ========================================================================= */}
       {/* DESKTOP SIDEBAR (>= lg)                                                   */}
       {/* ========================================================================= */}
@@ -69,32 +69,32 @@ export function AppShell({ children }: AppShellProps) {
       {/* ========================================================================= */}
       <div className="flex-1 flex flex-col h-full min-h-0 min-w-0 overflow-hidden">
         {/* Mobile / Tablet Topbar (< lg) */}
-        <header className="flex lg:hidden h-14 items-center justify-between px-3.5 sm:px-4 border-b border-[#E2D9CC] bg-[#FFFFFF] shadow-2xs flex-shrink-0 z-20">
+        <header className="flex lg:hidden h-14 items-center justify-between px-3.5 sm:px-4 border-b border-border bg-card shadow-2xs flex-shrink-0 z-20">
           <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
             <button
               type="button"
               onClick={() => setMobileMenuOpen(true)}
-              className="p-2 -ml-1 rounded-xl text-[#241C15] hover:bg-[#F4EFEA] border border-[#E2D9CC] transition-colors cursor-pointer flex items-center justify-center shadow-2xs shrink-0"
+              className="p-2 -ml-1 rounded-xl text-foreground hover:bg-secondary border border-border transition-colors cursor-pointer flex items-center justify-center shadow-2xs shrink-0"
               aria-label="Abrir Menú Lateral"
             >
-              <Menu className="h-5 w-5 text-[#241C15]" />
+              <Menu className="h-5 w-5 text-foreground" />
             </button>
-            <span className="font-black text-sm text-[#241C15] truncate">
+            <span className="font-bold text-sm text-foreground truncate">
               {getPageTitle()}
             </span>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
             <div
-              className="h-8 px-2 rounded-xl flex items-center justify-center font-bold text-xs shadow-2xs bg-indigo-600 text-white"
+              className="h-8 px-2.5 rounded-xl flex items-center justify-center font-bold text-xs shadow-2xs bg-primary text-primary-foreground"
             >
               BG
             </div>
           </div>
         </header>
 
-        {/* Scrollable Main Content (Strictly Mobile-First & Overflow protected) */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-[#F8F6F2] p-3 sm:p-4 lg:p-5 pb-12 sm:pb-8 text-[#241C15] overscroll-y-contain">
+        {/* Scrollable Main Content */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-background p-3 sm:p-4 lg:p-6 pb-12 sm:pb-8 text-foreground overscroll-y-contain">
           <div className="mx-auto max-w-7xl w-full">
             {children}
           </div>

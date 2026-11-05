@@ -97,7 +97,7 @@ export function ClientesClient({ initialClientes }: ClientesClientProps) {
     if (!tel) return '#'
     let clean = tel.replace(/\D/g, '')
     if (clean.length === 9) clean = `51${clean}`
-    const text = encodeURIComponent(`¡Hola ${clientName || ''}! Te escribimos de NOVA Studio...`)
+    const text = encodeURIComponent(`¡Hola ${clientName || ''}! Te escribimos de NOVA Board Games para hacer seguimiento a tus pedidos y consultas...`)
     return `https://wa.me/${clean}?text=${text}`
   }
 
@@ -947,18 +947,18 @@ export function ClientesClient({ initialClientes }: ClientesClientProps) {
             </div>
 
             {/* Footer Actions */}
-            <div className="pt-3 border-t border-[#E2D9CC] flex items-center justify-end gap-2">
+            <div className="pt-3 border-t border-[#E2D9CC] flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setModalFormOpen(false)}
-                className="px-4 py-2 rounded-xl border border-[#E2D9CC] bg-[#FFFFFF] hover:bg-[#F8F6F2] text-xs font-bold text-[#75695D] cursor-pointer transition-colors"
+                className="h-10 min-h-[44px] sm:min-h-0 sm:h-9 px-4 rounded-xl border border-[#E2D9CC] bg-[#FFFFFF] hover:bg-[#F8F6F2] text-xs font-bold text-[#75695D] cursor-pointer active:scale-95 transition-all text-center"
               >
                 Cancelar
               </button>
               <Button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-5 py-2 rounded-xl bg-[#A36F4C] hover:bg-[#8C5D3D] text-white text-xs font-bold shadow-sm cursor-pointer transition-colors"
+                className="h-10 min-h-[44px] sm:min-h-0 sm:h-9 px-5 rounded-xl bg-[#A36F4C] hover:bg-[#8C5D3D] text-white text-xs font-bold shadow-sm cursor-pointer active:scale-95 transition-all"
               >
                 {isSubmitting ? 'Guardando...' : editingId ? 'Guardar Cambios' : 'Registrar Cliente'}
               </Button>

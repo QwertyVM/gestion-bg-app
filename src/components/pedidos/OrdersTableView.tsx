@@ -25,6 +25,9 @@ import {
   Pencil,
   Trash2,
   Share2,
+  Printer,
+  Phone,
+  MessageCircle,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
@@ -203,6 +206,7 @@ interface OrdersTableViewProps {
   onEditPedido: (pedido: PedidoView) => void
   onEliminarPedido: (id: string, codigo: string) => void
   onCopyWhatsApp: (pedido: PedidoView) => void
+  onPrintThermal?: (pedido: PedidoView) => void
   formatCurrency: (val: number) => string
   formatDate: (val: string | Date | null | undefined) => string
   currentPage: number
@@ -223,6 +227,7 @@ export function OrdersTableView({
   onEditPedido,
   onEliminarPedido,
   onCopyWhatsApp,
+  onPrintThermal,
   formatCurrency,
   formatDate,
   currentPage,
@@ -256,8 +261,175 @@ export function OrdersTableView({
           </p>
         </div>
       ) : (
-        <div className="w-full overflow-hidden">
-          <Table className="w-full table-fixed">
+        <>
+          {/* ========================================================================= */}
+          {/* VISTA MÓVIL (md:hidden): TARJETAS ERGONÓMICAS Y TÁCTILES                  */}
+          {/* ========================================================================= */}
+          <div className="md:hidden divide-y divide-border/60">
+            {pedidos.map((p) => {
+              const isFullyPaid = p.saldoPendiente <= 0
+              const primaryItem = p.items[0]
+              const productImg = primaryItem?.producto?.imagenUrl
+
+              return (
+                <div
+                  key={p.id}
+                  onClick={() => onSelectPedido(p)}
+                  className="p-3.5 space-y-3 bg-card hover:bg-secondary/20 transition-colors cursor-pointer active:bg-secondary/30 select-none"
+                >
+                  {/* Fila 1: Código, Fecha y Acciones Rápidas */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-mono text-xs font-bold bg-accent text-accent-foreground px-2 py-0.5 rounded-lg border border-border/70 shrink-0">
+                        {p.codigo}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground truncate">
+                        {formatDate(p.fecha)}
+                      </span>
+                    </div>
+
+                    {/* Botones de Acción Táctil (WhatsApp, 80mm, Menú) */}
+                    <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => onCopyWhatsApp(p)}
+                        className="h-9 w-9 rounded-xl text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 flex items-center justify-center transition-colors active:scale-95"
+                        title={p.estado === 'PENDIENTE' ? 'Seguimiento por WhatsApp' : 'Enviar por WhatsApp'}
+                      >
+                        <Share2 className="h-4 w-4" />
+                        <span className="sr-only">WhatsApp</span>
+                      </button>
+
+                      {onPrintThermal && (
+                        <button
+                          type="button"
+                          onClick={() => onPrintThermal(p)}
+                          className="h-9 w-9 rounded-xl text-primary bg-primary/10 hover:bg-primary/20 flex items-center justify-center transition-colors active:scale-95"
+                          title="Imprimir Boleta 80mm"
+                        >
+                          <Printer className="h-4 w-4" />
+                          <span className="sr-only">80mm</span>
+                        </button>
+                      )}
+
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          onClick={(e) => e.stopPropagation()}
+                          className="h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary flex items-center justify-center cursor-pointer active:scale-95 transition-colors"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-52 bg-card border border-border rounded-xl shadow-lg p-1 z-50">
+                          <DropdownMenuItem
+                            onClick={() => onSelectPedido(p)}
+                            className="flex items-center gap-2 text-xs font-semibold px-2.5 py-2 cursor-pointer rounded-lg hover:bg-secondary text-foreground"
+                          >
+                            <Eye className="h-3.5 w-3.5 text-primary" />
+                            <span>Ver Detalle del Pedido</span>
+                          </DropdownMenuItem>
+                          {onPrintThermal && (
+                            <DropdownMenuItem
+                              onClick={() => onPrintThermal(p)}
+                              className="flex items-center gap-2 text-xs font-semibold px-2.5 py-2 cursor-pointer rounded-lg hover:bg-secondary text-foreground"
+                            >
+                              <Printer className="h-3.5 w-3.5 text-primary" />
+                              <span>Imprimir Boleta (80mm)</span>
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem
+                            onClick={() => onCopyWhatsApp(p)}
+                            className="flex items-center gap-2 text-xs font-semibold px-2.5 py-2 cursor-pointer rounded-lg hover:bg-secondary text-foreground"
+                          >
+                            <Share2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
+                            <span>{p.estado === 'PENDIENTE' ? 'Seguimiento por WhatsApp' : 'Enviar por WhatsApp'}</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => onEditPedido(p)}
+                            className="flex items-center gap-2 text-xs font-semibold px-2.5 py-2 cursor-pointer rounded-lg hover:bg-secondary text-foreground"
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-primary" />
+                            <span>Editar Pedido</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator className="my-1 bg-border/60" />
+                          <DropdownMenuItem
+                            onClick={() => onEliminarPedido(p.id, p.codigo)}
+                            className="flex items-center gap-2 text-xs font-semibold px-2.5 py-2 cursor-pointer rounded-lg hover:bg-destructive/10 text-destructive"
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            <span>Eliminar Pedido</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+
+                  {/* Fila 2: Cliente & Dropdown de Estado */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <span className="font-bold text-sm text-foreground block truncate">
+                        {p.cliente}
+                      </span>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono mt-0.5">
+                        {p.telefono && <span>📞 {p.telefono}</span>}
+                        {p.destinoEnvio && <span>🚚 {p.destinoEnvio}</span>}
+                      </div>
+                      {p.estado === 'PENDIENTE' && (
+                        <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.2 rounded-md mt-1 inline-flex items-center gap-1">
+                          <Clock className="w-2.5 h-2.5" /> Cotización / En Seguimiento
+                        </span>
+                      )}
+                    </div>
+
+                    <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                      <OrderStatusDropdown pedido={p} onCambiarEstado={onCambiarEstado} />
+                    </div>
+                  </div>
+
+                  {/* Fila 3: Producto(s) y Total / Saldo */}
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/50">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center shrink-0 border border-border/70 overflow-hidden">
+                        {productImg ? (
+                          <img src={productImg} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <Boxes className="w-4 h-4 text-primary" />
+                        )}
+                      </div>
+                      <span className="text-xs font-medium text-foreground truncate">
+                        {primaryItem?.nombreProductoSnapshot || 'Sin productos'}
+                        {p.items.length > 1 && (
+                          <span className="text-[10px] text-muted-foreground ml-1">
+                            (+{p.items.length - 1} más)
+                          </span>
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <span className="font-mono text-sm font-bold text-foreground block">
+                        {formatCurrency(p.total)}
+                      </span>
+                      <span className="text-[10px] font-semibold block">
+                        {isFullyPaid ? (
+                          <span className="text-emerald-700 dark:text-emerald-400">✓ Pagado</span>
+                        ) : p.montoPagado > 0 ? (
+                          <span className="text-amber-700 dark:text-amber-400">Resta {formatCurrency(p.saldoPendiente)}</span>
+                        ) : (
+                          <span className="text-destructive">Sin anticipo</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* ========================================================================= */}
+          {/* VISTA ESCRITORIO (hidden md:block): TABLA DE ALTA DENSIDAD               */}
+          {/* ========================================================================= */}
+          <div className="hidden md:block w-full overflow-x-auto">
+            <Table className="w-full min-w-[850px] table-fixed">
             <colgroup>
               <col className="w-[13%]" />
               <col className="w-[18%]" />
@@ -377,6 +549,12 @@ export function OrdersTableView({
                         <span className="text-xs text-muted-foreground mt-0.5 font-mono truncate">
                           {p.dni ? `DNI: ${p.dni}` : p.telefono ? `Tel: ${p.telefono}` : 'Sin documento'}
                         </span>
+                        {/* Fila 3: Indicador de Seguimiento para cotizaciones / posibles pedidos */}
+                        {p.estado === 'PENDIENTE' && (
+                          <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.2 rounded-md mt-1 inline-flex items-center gap-1">
+                            <Clock className="w-2.5 h-2.5" /> Cotización / Seguimiento
+                          </span>
+                        )}
                       </div>
                     </TableCell>
 
@@ -452,7 +630,7 @@ export function OrdersTableView({
 
                     {/* Columna 6: TOTAL & ACCIONES (16% / text-right pr-5) */}
                     <TableCell className="w-[16%] pr-5 py-3.5 align-middle text-right">
-                      <div className="flex items-center justify-end gap-2.5">
+                      <div className="flex items-center justify-end gap-2">
                         <div className="flex flex-col items-end min-w-0 justify-center">
                           {/* Monto principal */}
                           <span className="font-mono text-sm font-extrabold text-foreground truncate tabular-nums leading-tight">
@@ -477,8 +655,33 @@ export function OrdersTableView({
                           </div>
                         </div>
 
-                        {/* Botón de menú de acciones ••• */}
-                        <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                        {/* Barra de Acciones Rápidas (Senior UX - 1 clic) */}
+                        <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1 shrink-0">
+                          {/* Botón WhatsApp directo */}
+                          <button
+                            type="button"
+                            onClick={() => onCopyWhatsApp(p)}
+                            title={p.estado === 'PENDIENTE' ? 'Dar seguimiento por WhatsApp' : 'Compartir resumen por WhatsApp'}
+                            className="h-8 w-8 rounded-lg text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 border border-transparent hover:border-emerald-500/20 transition-colors flex items-center justify-center cursor-pointer"
+                          >
+                            <Share2 className="h-3.5 w-3.5" />
+                            <span className="sr-only">WhatsApp</span>
+                          </button>
+
+                          {/* Botón Imprimir Boleta 80mm */}
+                          {onPrintThermal && (
+                            <button
+                              type="button"
+                              onClick={() => onPrintThermal(p)}
+                              title="Imprimir Boleta / Ticket 80mm"
+                              className="h-8 w-8 rounded-lg text-primary hover:bg-primary/10 border border-transparent hover:border-primary/20 transition-colors flex items-center justify-center cursor-pointer"
+                            >
+                              <Printer className="h-3.5 w-3.5" />
+                              <span className="sr-only">Imprimir 80mm</span>
+                            </button>
+                          )}
+
+                          {/* Dropdown de Más Opciones */}
                           <DropdownMenu>
                             <DropdownMenuTrigger
                               onClick={(e) => e.stopPropagation()}
@@ -491,14 +694,34 @@ export function OrdersTableView({
 
                             <DropdownMenuContent
                               align="end"
-                              className="w-52 bg-card border border-border rounded-xl shadow-lg p-1 z-50"
+                              className="w-54 bg-card border border-border rounded-xl shadow-lg p-1 z-50"
                             >
                               <DropdownMenuItem
                                 onClick={() => onSelectPedido(p)}
                                 className="flex items-center gap-2 text-xs font-semibold px-2.5 py-2 cursor-pointer rounded-lg hover:bg-secondary text-foreground"
                               >
                                 <Eye className="h-3.5 w-3.5 text-primary" />
-                                <span>Ver Detalle / Ticket</span>
+                                <span>Ver Detalle del Pedido</span>
+                              </DropdownMenuItem>
+
+                              {onPrintThermal && (
+                                <DropdownMenuItem
+                                  onClick={() => onPrintThermal(p)}
+                                  className="flex items-center gap-2 text-xs font-semibold px-2.5 py-2 cursor-pointer rounded-lg hover:bg-secondary text-foreground"
+                                >
+                                  <Printer className="h-3.5 w-3.5 text-primary" />
+                                  <span>Imprimir Boleta (80mm)</span>
+                                </DropdownMenuItem>
+                              )}
+
+                              <DropdownMenuItem
+                                onClick={() => onCopyWhatsApp(p)}
+                                className="flex items-center gap-2 text-xs font-semibold px-2.5 py-2 cursor-pointer rounded-lg hover:bg-secondary text-foreground"
+                              >
+                                <Share2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
+                                <span>
+                                  {p.estado === 'PENDIENTE' ? 'Seguimiento por WhatsApp' : 'Enviar por WhatsApp'}
+                                </span>
                               </DropdownMenuItem>
 
                               <DropdownMenuItem
@@ -507,14 +730,6 @@ export function OrdersTableView({
                               >
                                 <Pencil className="h-3.5 w-3.5 text-primary" />
                                 <span>Editar Pedido</span>
-                              </DropdownMenuItem>
-
-                              <DropdownMenuItem
-                                onClick={() => onCopyWhatsApp(p)}
-                                className="flex items-center gap-2 text-xs font-semibold px-2.5 py-2 cursor-pointer rounded-lg hover:bg-secondary text-foreground"
-                              >
-                                <Share2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
-                                <span>Copiar Resumen WhatsApp</span>
                               </DropdownMenuItem>
 
                               <DropdownMenuSeparator className="my-1 bg-border/60" />
@@ -537,6 +752,7 @@ export function OrdersTableView({
             </TableBody>
           </Table>
         </div>
+        </>
       )}
 
       {/* Paginación Unificada en el Footer del Contenedor de la Tabla */}
@@ -572,13 +788,13 @@ export function OrdersTableView({
           </div>
 
           {itemsPerPage !== 9999 && totalPages > 1 && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap justify-center">
               <Button
                 size="sm"
                 variant="outline"
                 disabled={currentPage === 1}
                 onClick={() => onPageChange(Math.max(1, currentPage - 1))}
-                className="h-8 px-2.5 rounded-xl border-border bg-card text-foreground font-bold text-xs disabled:opacity-40 cursor-pointer flex items-center gap-1 hover:bg-secondary"
+                className="h-8 px-2.5 rounded-xl border-border bg-card text-foreground font-bold text-xs disabled:opacity-40 cursor-pointer flex items-center gap-1 hover:bg-secondary active:scale-95 transition-transform"
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
                 <span>Anterior</span>
@@ -589,7 +805,7 @@ export function OrdersTableView({
                   key={page}
                   type="button"
                   onClick={() => onPageChange(page)}
-                  className={`w-8 h-8 rounded-xl text-xs font-bold font-mono transition-all cursor-pointer ${
+                  className={`w-8 h-8 rounded-xl text-xs font-bold font-mono transition-all cursor-pointer active:scale-95 ${
                     currentPage === page
                       ? 'bg-foreground text-background shadow-xs'
                       : 'bg-card text-muted-foreground hover:bg-secondary hover:text-foreground border border-border'
@@ -604,7 +820,7 @@ export function OrdersTableView({
                 variant="outline"
                 disabled={currentPage === totalPages}
                 onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
-                className="h-8 px-2.5 rounded-xl border-border bg-card text-foreground font-bold text-xs disabled:opacity-40 cursor-pointer flex items-center gap-1 hover:bg-secondary"
+                className="h-8 px-2.5 rounded-xl border-border bg-card text-foreground font-bold text-xs disabled:opacity-40 cursor-pointer flex items-center gap-1 hover:bg-secondary active:scale-95 transition-transform"
               >
                 <span>Siguiente</span>
                 <ChevronRight className="h-3.5 w-3.5" />
